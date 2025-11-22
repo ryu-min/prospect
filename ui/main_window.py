@@ -7,6 +7,7 @@ from ui.tree_view import ProtoTreeView
 from proto.compiler import ProtoCompiler
 from proto.decoder import ProtoDecoder
 
+
 class ProtoEditor(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -28,46 +29,64 @@ class ProtoEditor(ctk.CTk):
         self.setup_ui()
 
     def setup_ui(self):
-        # Main layout
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_rowconfigure(0, weight=1)
+        # Configure main grid layout
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)  # Main content area
+        self.grid_rowconfigure(2, weight=0)  # Status bar
 
-        # Left panel - navigation
-        self.left_frame = ctk.CTkFrame(self, width=200)
-        self.left_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
-        self.left_frame.grid_propagate(False)
+        # Toolbar frame at the top
+        self.toolbar_frame = ctk.CTkFrame(self, height=40)
+        self.toolbar_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=5)
+        self.toolbar_frame.grid_propagate(False)
 
-        # Control buttons
+        # Left-aligned container for buttons
+        self.buttons_container = ctk.CTkFrame(self.toolbar_frame, fg_color="transparent")
+        self.buttons_container.pack(side="left", fill="y", padx=5, pady=5)
+
+        # Toolbar buttons - packed to the left inside container
         self.load_binary_btn = ctk.CTkButton(
-            self.left_frame, text="Load Binary File", command=self.load_binary_file
+            self.buttons_container,
+            text="open binary",
+            command=self.load_binary_file,
+            width=100
         )
-        self.load_binary_btn.pack(pady=5, fill="x")
+        self.load_binary_btn.pack(side="left", padx=5)
 
         self.load_proto_btn = ctk.CTkButton(
-            self.left_frame, text="Load .proto File", command=self.load_proto_file
+            self.buttons_container,
+            text="open schema",
+            command=self.load_proto_file,
+            width=100
         )
-        self.load_proto_btn.pack(pady=5, fill="x")
+        self.load_proto_btn.pack(side="left", padx=5)
 
         self.save_binary_btn = ctk.CTkButton(
-            self.left_frame, text="Save Binary File", command=self.save_binary_file
+            self.buttons_container,
+            text="save",
+            command=self.save_binary_file,
+            width=60
         )
-        self.save_binary_btn.pack(pady=5, fill="x")
+        self.save_binary_btn.pack(side="left", padx=5)
 
-        # Right panel - content
-        self.right_frame = ctk.CTkFrame(self)
-        self.right_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
-        self.right_frame.grid_columnconfigure(0, weight=1)
-        self.right_frame.grid_rowconfigure(1, weight=1)
+        # Main content area
+        self.content_frame = ctk.CTkFrame(self)
+        self.content_frame.grid(row=1, column=0, padx=10, pady=5, sticky="nsew")
+        self.content_frame.grid_columnconfigure(0, weight=1)
+        self.content_frame.grid_rowconfigure(0, weight=1)
 
-        # Tree view for structured display
-        self.tree_view = ProtoTreeView(self.right_frame)
-        self.tree_view.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        # Tree view for structured display - now fills all available space
+        self.tree_view = ProtoTreeView(self.content_frame)
+        self.tree_view.grid(row=0, column=0, sticky="nsew")
 
-        # Status bar
+        # Status bar at the bottom
         self.status_var = tk.StringVar(value="Ready")
-        self.status_bar = ctk.CTkLabel(self, textvariable=self.status_var,
-                                       font=ctk.CTkFont(size=12))
-        self.status_bar.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=5)
+        self.status_bar = ctk.CTkLabel(
+            self,
+            textvariable=self.status_var,
+            font=ctk.CTkFont(size=12),
+            height=20
+        )
+        self.status_bar.grid(row=2, column=0, sticky="ew", padx=10, pady=5)
 
     def load_binary_file(self):
         file_path = filedialog.askopenfilename(
