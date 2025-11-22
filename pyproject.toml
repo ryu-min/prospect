@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "ww"
+version = "0.1.0"
+description = ""
+authors = ["Ryumin Sergey Pavlovich"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.14"
+customtkinter = "^5.2.2"
+protobuf = "^6.33.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
