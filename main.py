@@ -2,12 +2,11 @@ import tkinter as tk
 import customtkinter as ctk
 from google.protobuf import message_factory
 from google.protobuf import text_format
-import google.protobuf.descriptor_pb2 as descriptor_pb2
 import os
 import tempfile
 import subprocess
 from tkinter import ttk
-from google.protobuf.internal import decoder, encoder
+from google.protobuf.internal import decoder
 import struct
 
 ctk.set_appearance_mode("Dark")
@@ -105,8 +104,8 @@ class ProtoEditor(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("Wire Weaver")
-        self.geometry("1400x900")
+        self.title("prospect")
+        self.geometry("900x600")
 
         # State variables
         self.current_proto_file = None
@@ -144,22 +143,6 @@ class ProtoEditor(ctk.CTk):
         )
         self.save_binary_btn.pack(pady=5, fill="x")
 
-        # Display mode
-        self.mode_label = ctk.CTkLabel(self.left_frame, text="Display Mode:")
-        self.mode_label.pack(pady=(20, 5))
-
-        self.mode_var = tk.StringVar(value="tree")
-        self.tree_radio = ctk.CTkRadioButton(
-            self.left_frame, text="Tree View", variable=self.mode_var, value="tree",
-            command=self.on_mode_change
-        )
-        self.tree_radio.pack(pady=5)
-
-        self.raw_radio = ctk.CTkRadioButton(
-            self.left_frame, text="Raw Text", variable=self.mode_var, value="raw",
-            command=self.on_mode_change
-        )
-        self.raw_radio.pack(pady=5)
 
         # Right panel - content
         self.right_frame = ctk.CTkFrame(self)
@@ -171,30 +154,11 @@ class ProtoEditor(ctk.CTk):
         self.tree_view = ProtoTreeView(self.right_frame)
         self.tree_view.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
 
-        # Text area for raw display
-        self.text_area = ctk.CTkTextbox(self.right_frame, font=("Consolas", 12))
-
-        # Initially hide text area
-        self.text_area.grid_remove()
-
         # Status bar
         self.status_var = tk.StringVar(value="Ready")
         self.status_bar = ctk.CTkLabel(self, textvariable=self.status_var,
                                        font=ctk.CTkFont(size=12))
         self.status_bar.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=5)
-
-    def on_mode_change(self):
-        """Handle display mode change"""
-        if self.mode_var.get() == "tree":
-            self.text_area.grid_remove()
-            self.tree_view.grid()
-            if self.parsed_data:
-                self.display_tree(self.parsed_data)
-        else:
-            self.tree_view.grid_remove()
-            self.text_area.grid()
-            if self.parsed_data:
-                self.display_raw_text(self.parsed_data)
 
     def load_binary_file(self):
         from tkinter import filedialog
@@ -305,7 +269,7 @@ class ProtoEditor(ctk.CTk):
                 # Decode without schema (like --decode_raw)
                 self.parsed_data = self.decode_raw()
 
-            self.update_display()
+            self.display_tree(self.parsed_data)
 
         except Exception as e:
             self.show_error(f"Decoding error: {str(e)}")
@@ -458,13 +422,6 @@ class ProtoEditor(ctk.CTk):
 
         return text
 
-    def update_display(self):
-        """Update display based on current mode"""
-        if self.mode_var.get() == "tree":
-            self.display_tree(self.parsed_data)
-        else:
-            self.display_raw_text(self.parsed_data)
-
     def display_tree(self, parsed_data):
         """Display data in tree view"""
         # Clear existing tree
@@ -542,17 +499,6 @@ class ProtoEditor(ctk.CTk):
                                        text="Error",
                                        values=(f"Display error: {str(e)}", "error"))
 
-    def display_raw_text(self, parsed_data):
-        """Display raw text in text area"""
-        if not parsed_data:
-            return
-
-        self.text_area.delete("1.0", "end")
-        if parsed_data["type"] == "proto":
-            self.text_area.insert("1.0", parsed_data["text"])
-        else:
-            self.text_area.insert("1.0", parsed_data["text"])
-
     def save_binary_file(self):
         """Save modified message as binary"""
         from tkinter import filedialog
@@ -564,12 +510,7 @@ class ProtoEditor(ctk.CTk):
 
         if file_path:
             try:
-                if self.message_instance and self.mode_var.get() == "raw":
-                    # If we're in raw mode, parse the text back to message
-                    modified_text = self.text_area.get("1.0", "end-1c")
-                    text_format.Parse(modified_text, self.message_instance)
-                    output_data = self.message_instance.SerializeToString()
-                elif self.message_instance:
+                if self.message_instance:
                     output_data = self.message_instance.SerializeToString()
                 else:
                     output_data = self.binary_data
@@ -583,7 +524,6 @@ class ProtoEditor(ctk.CTk):
                 self.show_error(f"Save error: {str(e)}")
 
     def show_error(self, message):
-        """Show error message"""
         self.status_var.set(f"Error: {message}")
         from tkinter import messagebox
         messagebox.showerror("Error", message)
