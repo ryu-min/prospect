@@ -27,6 +27,7 @@ class ProtoEditor(ctk.CTk):
         self.proto_decoder = ProtoDecoder()
 
         self.setup_ui()
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
     def setup_ui(self):
         # Configure main grid layout
@@ -113,6 +114,10 @@ class ProtoEditor(ctk.CTk):
 
         if file_path:
             try:
+                # Проверка существования файла
+                if not os.path.exists(file_path):
+                    raise FileNotFoundError(f"Proto file not found: {file_path}")
+
                 self.current_proto_file = file_path
                 with open(file_path, 'r', encoding='utf-8') as f:
                     proto_content = f.read()
@@ -206,9 +211,11 @@ class ProtoEditor(ctk.CTk):
                             if field.type == field.TYPE_MESSAGE:
                                 self.display_proto_tree(item, node, f"[{i}].")
                             else:
+                                # Получаем тип поля для простых типов в repeated
+                                field_type = self._get_field_type_name(field)
                                 self.tree_view.tree.insert(node, "end",
                                                            text=f"[{i}]",
-                                                           values=(str(item), field.type_name))
+                                                           values=(str(item), field_type))
                 elif field.type == field.TYPE_MESSAGE:
                     # Nested message
                     nested_msg = getattr(message, field_name)
@@ -224,13 +231,49 @@ class ProtoEditor(ctk.CTk):
                 else:
                     # Simple field
                     value = getattr(message, field_name)
+                    field_type = self._get_field_type_name(field)
                     self.tree_view.tree.insert(parent, "end",
                                                text=f"{prefix}{field_name}",
-                                               values=(str(value), field.type_name))
+                                               values=(str(value), field_type))
         except Exception as e:
             self.tree_view.tree.insert(parent, "end",
                                        text="Error",
                                        values=(f"Display error: {str(e)}", "error"))
+
+    def _get_field_type_name(self, field):
+        """Get field type as string for different protobuf versions"""
+        try:
+            # Для старых версий protobuf
+            if hasattr(field, 'type_name'):
+                return field.type_name
+
+            # Для новых версий protobuf (4.x+)
+            # Преобразуем числовой тип в строковое представление
+            type_mapping = {
+                field.TYPE_DOUBLE: "double",
+                field.TYPE_FLOAT: "float",
+                field.TYPE_INT64: "int64",
+                field.TYPE_UINT64: "uint64",
+                field.TYPE_INT32: "int32",
+                field.TYPE_FIXED64: "fixed64",
+                field.TYPE_FIXED32: "fixed32",
+                field.TYPE_BOOL: "bool",
+                field.TYPE_STRING: "string",
+                field.TYPE_GROUP: "group",
+                field.TYPE_MESSAGE: "message",
+                field.TYPE_BYTES: "bytes",
+                field.TYPE_UINT32: "uint32",
+                field.TYPE_ENUM: "enum",
+                field.TYPE_SFIXED32: "sfixed32",
+                field.TYPE_SFIXED64: "sfixed64",
+                field.TYPE_SINT32: "sint32",
+                field.TYPE_SINT64: "sint64",
+            }
+
+            return type_mapping.get(field.type, f"unknown({field.type})")
+
+        except Exception as e:
+            return f"type_error"
 
     def save_binary_file(self):
         """Save modified message as binary"""
@@ -258,3 +301,9 @@ class ProtoEditor(ctk.CTk):
     def show_error(self, message):
         self.status_var.set(f"Error: {message}")
         messagebox.showerror("Error", message)
+
+    def on_closing(self):
+        """Clean up resources when closing the application"""
+        if hasattr(self, 'proto_compiler'):
+            self.proto_compiler.cleanup_temp_dirs()
+        self.destroy()
