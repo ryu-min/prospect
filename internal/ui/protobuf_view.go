@@ -30,9 +30,13 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window) fyne.CanvasObject 
 	treeText.Wrapping = fyne.TextWrapWord
 	treeText.Disable() // Делаем только для чтения
 
+	// Получаем состояние диалогов
+	dialogState := GetFileDialogState()
+
 	// Кнопка открытия файла
 	openBtn := widget.NewButton("Открыть бинарный protobuf файл", func() {
-		dialog.ShowFileOpen(func(reader fyne.URIReadCloser, err error) {
+		// Создаем диалог с сохранением позиции
+		fileDialog := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
 			if err != nil {
 				dialog.ShowError(err, parentWindow)
 				return
@@ -41,6 +45,9 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window) fyne.CanvasObject 
 				return
 			}
 			defer reader.Close()
+
+			// Сохраняем последнюю директорию
+			dialogState.SetLastOpenDir(reader.URI())
 
 			// Читаем данные
 			data := make([]byte, 0)
@@ -71,6 +78,15 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window) fyne.CanvasObject 
 			treeText.Refresh() // Принудительно обновляем виджет
 			fmt.Fprintf(os.Stdout, "[INFO] Protobuf файл успешно распарсен\n")
 		}, parentWindow)
+
+		// Устанавливаем начальную директорию
+		if lastDir := dialogState.GetLastOpenDir(); lastDir != nil {
+			fileDialog.SetLocation(lastDir)
+		}
+
+		// Показываем диалог
+		fileDialog.Resize(dialogState.GetDialogSize())
+		fileDialog.Show()
 	})
 
 	// Кнопка применения схемы
@@ -80,7 +96,7 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window) fyne.CanvasObject 
 			return
 		}
 
-		dialog.ShowFileOpen(func(reader fyne.URIReadCloser, err error) {
+		fileDialog := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
 			if err != nil {
 				dialog.ShowError(err, parentWindow)
 				return
@@ -89,6 +105,9 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window) fyne.CanvasObject 
 				return
 			}
 			defer reader.Close()
+
+			// Сохраняем последнюю директорию для схем
+			dialogState.SetLastSchemaDir(reader.URI())
 
 			schemaPath := reader.URI().Path()
 			fmt.Fprintf(os.Stdout, "[INFO] Применение схемы: %s\n", schemaPath)
@@ -104,6 +123,15 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window) fyne.CanvasObject 
 			treeText.SetText(formatTree(tree, 0))
 			fmt.Fprintf(os.Stdout, "[INFO] Схема успешно применена\n")
 		}, parentWindow)
+
+		// Устанавливаем начальную директорию
+		if lastDir := dialogState.GetLastSchemaDir(); lastDir != nil {
+			fileDialog.SetLocation(lastDir)
+		}
+
+		// Показываем диалог
+		fileDialog.Resize(dialogState.GetDialogSize())
+		fileDialog.Show()
 	})
 
 	// Кнопка экспорта в JSON
@@ -119,7 +147,7 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window) fyne.CanvasObject 
 			return
 		}
 
-		dialog.ShowFileSave(func(writer fyne.URIWriteCloser, err error) {
+		fileDialog := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
 			if err != nil {
 				dialog.ShowError(err, parentWindow)
 				return
@@ -129,6 +157,9 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window) fyne.CanvasObject 
 			}
 			defer writer.Close()
 
+			// Сохраняем последнюю директорию для сохранения
+			dialogState.SetLastSaveDir(writer.URI())
+
 			if _, err := writer.Write(jsonData); err != nil {
 				dialog.ShowError(fmt.Errorf("ошибка записи: %w", err), parentWindow)
 				return
@@ -136,6 +167,15 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window) fyne.CanvasObject 
 
 			dialog.ShowInformation("Успех", "JSON файл сохранен", parentWindow)
 		}, parentWindow)
+
+		// Устанавливаем начальную директорию
+		if lastDir := dialogState.GetLastSaveDir(); lastDir != nil {
+			fileDialog.SetLocation(lastDir)
+		}
+
+		// Показываем диалог
+		fileDialog.Resize(dialogState.GetDialogSize())
+		fileDialog.Show()
 	})
 
 	// Панель кнопок
