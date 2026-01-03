@@ -25,14 +25,9 @@ prospect/
 
 Приложение использует `container.AppTabs` напрямую из Fyne для управления вкладками. Все функции создания вкладок находятся в пакете `internal/ui`.
 
-**Доступные функции создания вкладок:**
-- `ui.CreateTextTab(tabs)` - вкладка с текстом
-- `ui.CreateFormTab(tabs)` - вкладка с формой
-- `ui.CreateListTab(tabs)` - вкладка со списком
-- `ui.CreateInputTab(tabs)` - вкладка с элементами ввода
-- `ui.CreateProgressTab(tabs)` - вкладка с прогресс-барами
-- `ui.CreateCustomTab(tabs)` - кастомная вкладка
-- `ui.AddTab(tabs, name, content)` - универсальная функция добавления вкладки
+**Доступные функции:**
+- `ui.CreateTab(tabs)` - создает новую вкладку по умолчанию
+- `ui.AddTab(tabs, name, content)` - универсальная функция добавления вкладки с произвольным содержимым
 
 ## Использование
 
@@ -43,35 +38,18 @@ prospect/
 $env:CGO_ENABLED=1; go run ./cmd/prospect
 ```
 
-### Добавление нового типа вкладки
+### Создание вкладки с произвольным содержимым
 
-1. Создайте функцию в `internal/ui/window.go`:
-
-```go
-func CreateMyTab(tabs *container.AppTabs) {
-    tabCounter++
-    tabName := fmt.Sprintf("Моя вкладка #%d", tabCounter)
-    
-    content := widget.NewLabel("Содержимое вкладки")
-    AddTab(tabs, tabName, content)
-}
-```
-
-2. Добавьте тип в список в функциях `createControlTab` и `createToolbar`:
+Используйте функцию `AddTab` для создания вкладки с любым содержимым:
 
 ```go
-tabTypes := []struct {
-    name string
-    fn   func(*container.AppTabs)
-}{
-    // ... существующие типы
-    {"Моя вкладка", CreateMyTab},
-}
+import "prospect/internal/ui"
 
-typeMap := map[string]func(*container.AppTabs){
-    // ... существующие маппинги
-    "Моя вкладка": CreateMyTab,
-}
+tabs := container.NewAppTabs()
+
+// Создание вкладки с произвольным содержимым
+content := widget.NewLabel("Мое содержимое")
+ui.AddTab(tabs, "Моя вкладка", content)
 ```
 
 ### Работа с вкладками напрямую
@@ -85,8 +63,8 @@ tabs := container.NewAppTabs()
 // Добавление вкладки с произвольным содержимым
 ui.AddTab(tabs, "Имя вкладки", widget.NewLabel("Содержимое"))
 
-// Создание вкладки по типу
-ui.CreateTextTab(tabs)
+// Создание вкладки по умолчанию
+ui.CreateTab(tabs)
 ```
 
 ## Требования
