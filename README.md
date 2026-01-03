@@ -12,11 +12,8 @@ prospect/
 ├── internal/
 │   ├── app/
 │   │   └── app.go           # Основной класс приложения
-│   ├── ui/
-│   │   └── window.go        # Создание и настройка главного окна
-│   └── widgets/
-│       ├── tabmanager.go    # Менеджер вкладок (универсальный)
-│       └── tabtypes.go      # Типы вкладок (фабрики)
+│   └── ui/
+│       └── window.go        # Создание окна и функции управления вкладками
 ├── go.mod
 ├── go.sum
 └── README.md
@@ -24,88 +21,72 @@ prospect/
 
 ## Архитектура
 
-### TabManager (internal/widgets/tabmanager.go)
+### Управление вкладками
 
-Базовый виджет-менеджер для управления вкладками. Работает с любыми виджетами через интерфейс `TabCreator`.
+Приложение использует `container.AppTabs` напрямую из Fyne для управления вкладками. Все функции создания вкладок находятся в пакете `internal/ui`.
 
-**Основные возможности:**
-- Добавление вкладок с произвольным содержимым
-- Регистрация создателей вкладок по типу
-- Создание вкладок по зарегистрированному типу
-- Удаление текущей вкладки
-
-**Интерфейс TabCreator:**
-```go
-type TabCreator interface {
-    CreateContent() fyne.CanvasObject
-    GetName() string
-}
-```
-
-### Типы вкладок (internal/widgets/tabtypes.go)
-
-Реализации `TabCreator` для различных типов вкладок:
-- `TextTabCreator` - вкладка с текстом
-- `FormTabCreator` - вкладка с формой
-- `ListTabCreator` - вкладка со списком
-- `InputTabCreator` - вкладка с элементами ввода
-- `ProgressTabCreator` - вкладка с прогресс-барами
-- `CustomTabCreator` - кастомная вкладка
+**Доступные функции создания вкладок:**
+- `ui.CreateTextTab(tabs)` - вкладка с текстом
+- `ui.CreateFormTab(tabs)` - вкладка с формой
+- `ui.CreateListTab(tabs)` - вкладка со списком
+- `ui.CreateInputTab(tabs)` - вкладка с элементами ввода
+- `ui.CreateProgressTab(tabs)` - вкладка с прогресс-барами
+- `ui.CreateCustomTab(tabs)` - кастомная вкладка
+- `ui.AddTab(tabs, name, content)` - универсальная функция добавления вкладки
 
 ## Использование
 
 ### Запуск приложения
 
 ```bash
-# Через скрипт
-.\run.ps1    # PowerShell
-.\run.bat    # CMD
-
-# Или напрямую
+# Напрямую
 $env:CGO_ENABLED=1; go run ./cmd/prospect
 ```
 
 ### Добавление нового типа вкладки
 
-1. Создайте структуру, реализующую интерфейс `TabCreator`:
+1. Создайте функцию в `internal/ui/window.go`:
 
 ```go
-type MyTabCreator struct {
-    BaseTabCreator
-}
-
-func NewMyTabCreator() *MyTabCreator {
-    return &MyTabCreator{
-        BaseTabCreator: BaseTabCreator{name: "Моя вкладка"},
-    }
-}
-
-func (mtc *MyTabCreator) CreateContent() fyne.CanvasObject {
-    // Создайте и верните содержимое вкладки
-    return widget.NewLabel("Содержимое")
+func CreateMyTab(tabs *container.AppTabs) {
+    tabCounter++
+    tabName := fmt.Sprintf("Моя вкладка #%d", tabCounter)
+    
+    content := widget.NewLabel("Содержимое вкладки")
+    AddTab(tabs, tabName, content)
 }
 ```
 
-2. Зарегистрируйте создатель в `internal/ui/window.go`:
+2. Добавьте тип в список в функциях `createControlTab` и `createToolbar`:
 
 ```go
-tabManager.RegisterTabCreator("Моя вкладка", widgets.NewMyTabCreator())
+tabTypes := []struct {
+    name string
+    fn   func(*container.AppTabs)
+}{
+    // ... существующие типы
+    {"Моя вкладка", CreateMyTab},
+}
+
+typeMap := map[string]func(*container.AppTabs){
+    // ... существующие маппинги
+    "Моя вкладка": CreateMyTab,
+}
 ```
 
-### Работа с TabManager напрямую
+### Работа с вкладками напрямую
 
 ```go
-// Создание менеджера
-tabManager := widgets.NewTabManager()
+import "prospect/internal/ui"
+
+// Создание контейнера вкладок
+tabs := container.NewAppTabs()
 
 // Добавление вкладки с произвольным содержимым
-tabManager.AddTab("Имя вкладки", widget.NewLabel("Содержимое"))
-
-// Регистрация создателя
-tabManager.RegisterTabCreator("Тип", creator)
+ui.AddTab(tabs, "Имя вкладки", widget.NewLabel("Содержимое"))
 
 // Создание вкладки по типу
-tabManager.CreateTabByType("Тип")
+ui.CreateTextTab(tabs)
 ```
 
 ## Требования
@@ -125,4 +106,3 @@ go mod tidy
 ```bash
 $env:CGO_ENABLED=1; go build -o prospect.exe ./cmd/prospect
 ```
-
