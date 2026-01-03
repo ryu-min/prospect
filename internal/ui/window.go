@@ -17,27 +17,16 @@ func NewMainWindow(fyneApp fyne.App) fyne.Window {
 	window.Resize(fyne.NewSize(800, 600))
 	window.CenterOnScreen()
 
-	// Создаем контейнер вкладок напрямую
-	tabs := container.NewAppTabs()
+	// Создаем кастомный виджет табов с кнопками закрытия
+	browserTabs := NewBrowserTabs()
+	browserTabs.SetAddButtonCallback(func() {
+		CreateTabWithClose(browserTabs)
+	})
 
-	// Создаем панель управления как первую вкладку (без увеличения счетчика)
-	controlTab := createControlTab(tabs)
-	controlTabItem := container.NewTabItem("Панель управления", controlTab)
-	tabs.Append(controlTabItem)
+	// Создаем первую вкладку по умолчанию
+	CreateTabWithClose(browserTabs)
 
-	// Создаем панель инструментов
-	toolbar := createToolbar(tabs)
-
-	// Используем Border layout: toolbar сверху, tabs в центре
-	content := container.NewBorder(
-		toolbar, // верх
-		nil,     // низ
-		nil,     // лево
-		nil,     // право
-		tabs,    // центр
-	)
-
-	window.SetContent(content)
+	window.SetContent(browserTabs)
 	return window
 }
 
@@ -90,50 +79,46 @@ func CreateTab(tabs *container.AppTabs) {
 		container.NewScroll(textArea),
 	)
 
-	// Добавляем вкладку без увеличения счетчика, так как он уже увеличен
-	newTab := container.NewTabItem(tabName, content)
-	tabs.Append(newTab)
-	tabs.Select(newTab)
-	fmt.Fprintf(os.Stdout, "[INFO] Добавлена вкладка: %s\n", tabName)
+	// Добавляем вкладку
+	AddTab(tabs, tabName, content)
 }
 
-// createControlTab создает вкладку с панелью управления
-func createControlTab(tabs *container.AppTabs) fyne.CanvasObject {
-	title := widget.NewLabel("Система управления вкладками")
-	title.TextStyle = fyne.TextStyle{Bold: true}
+// CreateTabWithClose создает новую вкладку с кнопкой закрытия через BrowserTabs
+func CreateTabWithClose(browserTabs *BrowserTabs) {
+	// Не увеличиваем счетчик здесь, он увеличится в AddTab
+	tabName := ""
 
-	infoLabel := widget.NewLabel("Нажмите на кнопку, чтобы создать новую вкладку")
-	infoLabel.Wrapping = fyne.TextWrapWord
+	textArea := widget.NewMultiLineEntry()
+	textArea.SetText("Новая вкладка\n\nВы можете редактировать этот текст.")
+	textArea.Wrapping = fyne.TextWrapWord
 
-	// Кнопка для создания новой вкладки
-	createBtn := widget.NewButton("Создать новую вкладку", func() {
-		CreateTab(tabs)
+	clearBtn := widget.NewButton("Очистить", func() {
+		textArea.SetText("")
+		fmt.Println("[INFO] Текст очищен")
 	})
-	createBtn.Importance = widget.HighImportance
 
-	content := container.NewVBox(
-		title,
-		widget.NewSeparator(),
-		infoLabel,
-		widget.NewSeparator(),
-		createBtn,
+	resetBtn := widget.NewButton("Сбросить", func() {
+		textArea.SetText("Новая вкладка\n\nВы можете редактировать этот текст.")
+		fmt.Println("[INFO] Текст сброшен")
+	})
+
+	topContainer := container.NewVBox(
+		widget.NewLabel("Редактор текста:"),
 	)
 
-	return container.NewScroll(content)
-}
-
-// createToolbar создает панель инструментов
-func createToolbar(tabs *container.AppTabs) fyne.CanvasObject {
-	addButton := widget.NewButton("+ Добавить вкладку", func() {
-		CreateTab(tabs)
-	})
-	addButton.Importance = widget.HighImportance
-
-	toolbar := container.NewHBox(
-		addButton,
-		widget.NewSeparator(),
-		widget.NewLabel("Доступно из любого таба"),
+	bottomContainer := container.NewHBox(
+		clearBtn,
+		resetBtn,
 	)
 
-	return container.NewPadded(toolbar)
+	content := container.NewBorder(
+		topContainer,
+		bottomContainer,
+		nil,
+		nil,
+		container.NewScroll(textArea),
+	)
+
+	// Добавляем вкладку
+	browserTabs.AddTab(tabName, content)
 }
