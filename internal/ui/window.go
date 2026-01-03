@@ -23,8 +23,9 @@ func NewMainWindow(fyneApp fyne.App) fyne.Window {
 		CreateTabWithClose(browserTabs)
 	})
 
-	// Создаем первую вкладку по умолчанию
-	CreateTabWithClose(browserTabs)
+	// Создаем первую вкладку по умолчанию - Protobuf Viewer
+	// Передаем окно для диалогов
+	CreateProtobufTab(browserTabs, fyneApp, window)
 
 	window.SetContent(browserTabs)
 	return window
@@ -121,4 +122,10 @@ func CreateTabWithClose(browserTabs *BrowserTabs) {
 
 	// Добавляем вкладку
 	browserTabs.AddTab(tabName, content)
+}
+
+// CreateProtobufTab создает вкладку для просмотра protobuf файлов
+func CreateProtobufTab(browserTabs *BrowserTabs, fyneApp fyne.App, parentWindow fyne.Window) {
+	content := ProtobufView(fyneApp, parentWindow)
+	browserTabs.AddTab("Protobuf Viewer", content)
 }
