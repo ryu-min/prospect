@@ -86,46 +86,36 @@ func CreateTab(tabs *container.AppTabs) {
 
 // CreateTabWithClose создает новую вкладку с кнопкой закрытия через BrowserTabs
 func CreateTabWithClose(browserTabs *BrowserTabs) {
-	// Не увеличиваем счетчик здесь, он увеличится в AddTab
-	tabName := ""
+	// Получаем главное окно из приложения
+	// Нужно передать fyneApp и window, но пока используем глобальный доступ
+	// Для этого нужно изменить сигнатуру или использовать другой подход
+	// Пока создаем protobuf view без окна (будет использоваться для диалогов)
 
-	textArea := widget.NewMultiLineEntry()
-	textArea.SetText("Новая вкладка\n\nВы можете редактировать этот текст.")
-	textArea.Wrapping = fyne.TextWrapWord
+	// Получаем приложение из первого окна
+	var fyneApp fyne.App
+	var parentWindow fyne.Window
 
-	clearBtn := widget.NewButton("Очистить", func() {
-		textArea.SetText("")
-		fmt.Println("[INFO] Текст очищен")
-	})
+	// Пытаемся получить окно из драйвера
+	// Это не идеально, но работает
+	windows := fyne.CurrentApp().Driver().AllWindows()
+	if len(windows) > 0 {
+		parentWindow = windows[0]
+		fyneApp = fyne.CurrentApp()
+	} else {
+		// Если окна нет, создаем новое (не должно произойти)
+		fyneApp = fyne.CurrentApp()
+		parentWindow = fyneApp.NewWindow("")
+	}
 
-	resetBtn := widget.NewButton("Сбросить", func() {
-		textArea.SetText("Новая вкладка\n\nВы можете редактировать этот текст.")
-		fmt.Println("[INFO] Текст сброшен")
-	})
-
-	topContainer := container.NewVBox(
-		widget.NewLabel("Редактор текста:"),
-	)
-
-	bottomContainer := container.NewHBox(
-		clearBtn,
-		resetBtn,
-	)
-
-	content := container.NewBorder(
-		topContainer,
-		bottomContainer,
-		nil,
-		nil,
-		container.NewScroll(textArea),
-	)
+	// Создаем protobuf viewer
+	content := ProtobufView(fyneApp, parentWindow, browserTabs)
 
 	// Добавляем вкладку
-	browserTabs.AddTab(tabName, content)
+	browserTabs.AddTab("", content)
 }
 
 // CreateProtobufTab создает вкладку для просмотра protobuf файлов
 func CreateProtobufTab(browserTabs *BrowserTabs, fyneApp fyne.App, parentWindow fyne.Window) {
-	content := ProtobufView(fyneApp, parentWindow)
+	content := ProtobufView(fyneApp, parentWindow, browserTabs)
 	browserTabs.AddTab("Protobuf Viewer", content)
 }

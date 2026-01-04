@@ -99,6 +99,18 @@ func (bt *BrowserTabs) SetAddButtonCallback(callback func()) {
 	bt.addCallback = callback
 }
 
+// UpdateTabContent обновляет контент выбранной вкладки
+func (bt *BrowserTabs) UpdateTabContent(content fyne.CanvasObject) {
+	if bt.selectedTab >= 0 && bt.selectedTab < len(bt.tabs) {
+		fmt.Fprintf(os.Stdout, "[DEBUG] Обновление контента вкладки %d\n", bt.selectedTab)
+		bt.tabs[bt.selectedTab].content = content
+		bt.Refresh()
+		fmt.Fprintf(os.Stdout, "[DEBUG] Контент вкладки обновлен\n")
+	} else {
+		fmt.Fprintf(os.Stderr, "[ERROR] Не удалось обновить контент: selectedTab=%d, len(tabs)=%d\n", bt.selectedTab, len(bt.tabs))
+	}
+}
+
 // CreateRenderer создает рендерер
 func (bt *BrowserTabs) CreateRenderer() fyne.WidgetRenderer {
 	// Создаем кнопку "+" один раз при создании рендерера
@@ -190,6 +202,9 @@ func (r *browserTabsRenderer) Refresh() {
 		nil,           // право
 		r.contentArea, // центр - содержимое выбранной вкладки
 	)
+
+	fmt.Fprintf(os.Stdout, "[DEBUG] Renderer Refresh: selectedTab=%d, contentArea=%v, mainContent=%v\n",
+		r.tabs.selectedTab, r.contentArea != nil, r.mainContent != nil)
 }
 
 func (r *browserTabsRenderer) Objects() []fyne.CanvasObject {

@@ -103,13 +103,16 @@ func (p *Parser) parseProtocOutput(output string) (*TreeNode, error) {
 	}
 
 	stack := []*TreeNode{root}
+	stackIndents := []int{0} // Отслеживаем отступы для каждого уровня стека
 
 	for _, line := range lines {
+		originalLine := line
 		line = strings.TrimRight(line, " \t")
 		if line == "" {
 			continue
 		}
 
+		indent := getIndentLevel(originalLine)
 		trimmedLine := strings.TrimLeft(line, " \t")
 
 		// Если строка заканчивается на "{", это начало вложенного сообщения
@@ -123,10 +126,23 @@ func (p *Parser) parseProtocOutput(output string) (*TreeNode, error) {
 				Children:   make([]*TreeNode, 0),
 				IsRepeated: false,
 			}
+			// Если отступ меньше текущего уровня стека, выходим из вложенных сообщений
+			for len(stack) > 1 && len(stackIndents) > 1 {
+				lastIndent := stackIndents[len(stackIndents)-1]
+				if indent <= lastIndent {
+					stack = stack[:len(stack)-1]
+					stackIndents = stackIndents[:len(stackIndents)-1]
+				} else {
+					break
+				}
+			}
 			if len(stack) > 0 {
 				stack[len(stack)-1].AddChild(node)
 			}
 			stack = append(stack, node)
+			stackIndents = append(stackIndents, indent)
+			fmt.Fprintf(os.Stdout, "[DEBUG] Открыто сообщение: %s (indent=%d, stackSize=%d)\n",
+				node.Name, indent, len(stack))
 			continue
 		}
 
@@ -134,28 +150,39 @@ func (p *Parser) parseProtocOutput(output string) (*TreeNode, error) {
 		if trimmedLine == "}" {
 			if len(stack) > 1 {
 				stack = stack[:len(stack)-1]
+				stackIndents = stackIndents[:len(stackIndents)-1]
 			}
 			continue
 		}
 
-		// Для плоского вывода (без отступов) все поля добавляются в текущий узел стека
-		// Если отступ меньше, чем у предыдущих узлов, выходим из вложенных сообщений
-		// Но для простых случаев (без отступов) все идет в root
-		for len(stack) > 1 {
-			// Проверяем, нужно ли выйти из текущего сообщения
-			// Если отступ меньше или равен, остаемся в текущем сообщении
-			// Это упрощенная логика для плоского вывода
-			break
+		// Если отступ меньше текущего уровня стека, выходим из вложенных сообщений
+		// Нужно найти правильного родителя на основе отступа
+		for len(stack) > 1 && len(stackIndents) > 1 {
+			lastIndent := stackIndents[len(stackIndents)-1]
+			// Если текущий отступ меньше или равен отступу последнего элемента стека,
+			// значит мы вышли из этого сообщения - удаляем его из стека
+			if indent <= lastIndent {
+				stack = stack[:len(stack)-1]
+				stackIndents = stackIndents[:len(stackIndents)-1]
+			} else {
+				// Отступ больше - мы все еще внутри сообщения
+				break
+			}
 		}
 
 		// Парсим строку
 		node := p.parseLine(trimmedLine)
 		if node != nil {
-			// Добавляем в текущий узел стека
+			// Добавляем в текущий узел стека (после корректировки стека)
 			if len(stack) > 0 {
+				parentName := stack[len(stack)-1].Name
 				stack[len(stack)-1].AddChild(node)
-				fmt.Fprintf(os.Stdout, "[DEBUG] Добавлен узел: %s (field_%d, %s) в %s\n",
-					node.Name, node.FieldNum, node.Type, stack[len(stack)-1].Name)
+				parentIndent := 0
+				if len(stackIndents) > 0 {
+					parentIndent = stackIndents[len(stackIndents)-1]
+				}
+				fmt.Fprintf(os.Stdout, "[DEBUG] Добавлен узел: %s (field_%d, %s) в %s (indent=%d, parentIndent=%d, stackSize=%d)\n",
+					node.Name, node.FieldNum, node.Type, parentName, indent, parentIndent, len(stack))
 			}
 		}
 	}
