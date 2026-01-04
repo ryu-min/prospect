@@ -86,18 +86,15 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 			currentTree = tree
 			fmt.Fprintf(os.Stdout, "[DEBUG] Дерево распарсено, узлов в root: %d\n", len(tree.Children))
 			
-			// ШАГ 1: Отображаем дерево в виде текста
-			treeText := formatTree(tree, 0)
-			fmt.Fprintf(os.Stdout, "[DEBUG] Форматированный текст дерева:\n%s\n", treeText)
+			// ШАГ 2: Отображаем дерево в виде таблицы
+			tableData := buildTableData(tree)
+			fmt.Fprintf(os.Stdout, "[DEBUG] Таблица создана, строк: %d\n", len(tableData))
 			
-			// Создаем текстовый виджет для отображения
-			textView := widget.NewMultiLineEntry()
-			textView.SetText(treeText)
-			textView.Wrapping = fyne.TextWrapWord
-			textView.Disable() // Только для чтения
+			// Создаем таблицу из контейнеров
+			tableContainer := createTableWidget(tableData)
 			
-			// Обновляем scroll контейнер с текстовым виджетом
-			newScrollContainer := container.NewScroll(textView)
+			// Обновляем scroll контейнер с таблицей
+			newScrollContainer := container.NewScroll(tableContainer)
 			treeScrollContainer = newScrollContainer
 			
 			// Обновляем Border контейнер
@@ -300,5 +297,101 @@ func formatTree(node *protobuf.TreeNode, indent int) string {
 	}
 
 	return result
+}
+
+// TableRow представляет строку таблицы
+type TableRow struct {
+	FieldName string
+	FieldNum  int
+	Type      string
+	Value     string
+	Children  int
+}
+
+// buildTableData преобразует дерево в табличные данные
+func buildTableData(node *protobuf.TreeNode) []TableRow {
+	var rows []TableRow
+	
+	var traverse func(*protobuf.TreeNode, int)
+	traverse = func(n *protobuf.TreeNode, level int) {
+		if n == nil {
+			return
+		}
+		
+		// Пропускаем root узел, но обрабатываем его детей
+		if n.Name != "root" {
+			valueStr := ""
+			if n.Value != nil {
+				valueStr = fmt.Sprintf("%v", n.Value)
+			}
+			if n.IsRepeated {
+				valueStr += " [repeated]"
+			}
+			
+			rows = append(rows, TableRow{
+				FieldName: n.Name,
+				FieldNum:  n.FieldNum,
+				Type:      n.Type,
+				Value:     valueStr,
+				Children:  len(n.Children),
+			})
+		}
+		
+		// Рекурсивно обрабатываем дочерние узлы
+		for _, child := range n.Children {
+			traverse(child, level+1)
+		}
+	}
+	
+	traverse(node, 0)
+	return rows
+}
+
+// createTableWidget создает виджет таблицы из данных
+func createTableWidget(data []TableRow) fyne.CanvasObject {
+	if len(data) == 0 {
+		return widget.NewLabel("(нет данных)")
+	}
+	
+	// Создаем заголовки таблицы (жирным шрифтом)
+	headerName := widget.NewLabel("Field Name")
+	headerName.TextStyle = fyne.TextStyle{Bold: true}
+	headerNum := widget.NewLabel("Field #")
+	headerNum.TextStyle = fyne.TextStyle{Bold: true}
+	headerType := widget.NewLabel("Type")
+	headerType.TextStyle = fyne.TextStyle{Bold: true}
+	headerValue := widget.NewLabel("Value")
+	headerValue.TextStyle = fyne.TextStyle{Bold: true}
+	headerChildren := widget.NewLabel("Children")
+	headerChildren.TextStyle = fyne.TextStyle{Bold: true}
+	
+	header := container.NewGridWithColumns(5,
+		headerName,
+		headerNum,
+		headerType,
+		headerValue,
+		headerChildren,
+	)
+	
+	// Создаем строки таблицы
+	rows := make([]fyne.CanvasObject, 0, len(data))
+	for _, row := range data {
+		rowContainer := container.NewGridWithColumns(5,
+			widget.NewLabel(row.FieldName),
+			widget.NewLabel(fmt.Sprintf("%d", row.FieldNum)),
+			widget.NewLabel(row.Type),
+			widget.NewLabel(row.Value),
+			widget.NewLabel(fmt.Sprintf("%d", row.Children)),
+		)
+		rows = append(rows, rowContainer)
+	}
+	
+	// Объединяем заголовок и строки
+	content := container.NewVBox(header)
+	for _, row := range rows {
+		content.Add(row)
+	}
+	
+	return content
 }
 
