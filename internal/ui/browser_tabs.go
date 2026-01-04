@@ -190,6 +190,10 @@ func (r *browserTabsRenderer) Refresh() {
 	// Создаем область содержимого
 	if r.tabs.selectedTab >= 0 && r.tabs.selectedTab < len(r.tabs.tabs) {
 		r.contentArea = r.tabs.tabs[r.tabs.selectedTab].content
+		// ВАЖНО: Обновляем контент после установки
+		if r.contentArea != nil {
+			r.contentArea.Refresh()
+		}
 	} else {
 		r.contentArea = widget.NewLabel("Нет открытых вкладок")
 	}

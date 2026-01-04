@@ -86,16 +86,39 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 			currentTree = tree
 			fmt.Fprintf(os.Stdout, "[DEBUG] Дерево распарсено, узлов в root: %d\n", len(tree.Children))
 			
-			// ШАГ 2: Отображаем дерево в виде таблицы
-			tableData := buildTableData(tree)
-			fmt.Fprintf(os.Stdout, "[DEBUG] Таблица создана, строк: %d\n", len(tableData))
+			// ШАГ 3: Отображаем дерево в виде дерева (widget.Tree)
+			adapter := NewProtobufTreeAdapter(tree)
+			adapter.DebugPrintTree() // Отладочный вывод структуры дерева
 			
-			// Создаем таблицу из контейнеров
-			tableContainer := createTableWidget(tableData)
+			// Создаем виджет дерева
+			newTreeWidget := widget.NewTree(adapter.ChildUIDs, adapter.IsBranch, adapter.CreateNode, adapter.UpdateNode)
 			
-			// Обновляем scroll контейнер с таблицей
-			newScrollContainer := container.NewScroll(tableContainer)
+			// Проверяем, что root имеет детей и открываем его
+			// В Fyne widget.Tree использует пустую строку "" для root
+			rootChildren := adapter.ChildUIDs("")
+			fmt.Fprintf(os.Stdout, "[DEBUG] Root children UIDs: %v\n", rootChildren)
+			
+			// ВАЖНО: Открываем root ДО добавления в контейнер (используем пустую строку)
+			if len(rootChildren) > 0 {
+				fmt.Fprintf(os.Stdout, "[DEBUG] Открываем ветку root (пустая строка)\n")
+				newTreeWidget.OpenBranch("")
+			}
+			
+			// Обновляем виджет дерева
+			newTreeWidget.Refresh()
+			fmt.Fprintf(os.Stdout, "[DEBUG] Виджет дерева создан и обновлен\n")
+			
+			treeWidget = newTreeWidget
+			
+			// Обновляем scroll контейнер с деревом
+			newScrollContainer := container.NewScroll(newTreeWidget)
+			newScrollContainer.Refresh()
 			treeScrollContainer = newScrollContainer
+			
+			// ВАЖНО: Принудительно запрашиваем данные для root
+			fmt.Fprintf(os.Stdout, "[DEBUG] Принудительно запрашиваем данные для root\n")
+			_ = adapter.ChildUIDs("root")
+			_ = adapter.IsBranch("root")
 			
 			// Обновляем Border контейнер
 			newBorder := container.NewBorder(
