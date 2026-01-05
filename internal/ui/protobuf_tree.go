@@ -12,12 +12,111 @@ import (
 
 // ProtobufTreeAdapter адаптирует TreeNode для widget.Tree
 type ProtobufTreeAdapter struct {
-	tree *protobuf.TreeNode
+	tree        *protobuf.TreeNode
+	editWidgets map[widget.TreeNodeID]*EditableNodeWidget
 }
+
+// EditableNodeWidget - виджет для редактирования значения узла
+type EditableNodeWidget struct {
+	widget.BaseWidget
+	nameLabel *widget.Label // Имя поля
+	typeLabel *widget.Label // Тип поля
+	entry     *widget.Entry // Значение для редактирования
+	uid       widget.TreeNodeID
+	adapter   *ProtobufTreeAdapter
+}
+
+// Константы для ширины колонок
+const (
+	nameColumnWidth = 120 // Ширина колонки имени
+	typeColumnWidth = 80  // Ширина колонки типа
+	columnSpacing   = 10  // Отступ между колонками
+)
+
+// NewEditableNodeWidget создает новый редактируемый виджет узла
+func NewEditableNodeWidget(uid widget.TreeNodeID, adapter *ProtobufTreeAdapter) *EditableNodeWidget {
+	ew := &EditableNodeWidget{
+		uid:       uid,
+		adapter:   adapter,
+		nameLabel: widget.NewLabel(""),
+		typeLabel: widget.NewLabel(""),
+		entry:     widget.NewEntry(),
+	}
+	ew.entry.OnChanged = func(value string) {
+		adapter.updateNodeValue(uid, value, "")
+	}
+	ew.ExtendBaseWidget(ew)
+	return ew
+}
+
+// CreateRenderer создает рендерер для редактируемого виджета
+func (ew *EditableNodeWidget) CreateRenderer() fyne.WidgetRenderer {
+	return &editableNodeRenderer{
+		widget:    ew,
+		nameLabel: ew.nameLabel,
+		typeLabel: ew.typeLabel,
+		entry:     ew.entry,
+		objects:   []fyne.CanvasObject{ew.nameLabel, ew.typeLabel, ew.entry},
+	}
+}
+
+type editableNodeRenderer struct {
+	widget    *EditableNodeWidget
+	nameLabel *widget.Label
+	typeLabel *widget.Label
+	entry     *widget.Entry
+	objects   []fyne.CanvasObject
+}
+
+func (r *editableNodeRenderer) Layout(size fyne.Size) {
+	// Все колонки начинаются на одном уровне (с учетом отступов дерева)
+	// Колонка имени
+	namePos := fyne.NewPos(0, (size.Height-r.nameLabel.MinSize().Height)/2)
+	r.nameLabel.Move(namePos)
+	r.nameLabel.Resize(fyne.NewSize(float32(nameColumnWidth), r.nameLabel.MinSize().Height))
+
+	// Колонка типа
+	typePos := fyne.NewPos(float32(nameColumnWidth+columnSpacing), (size.Height-r.typeLabel.MinSize().Height)/2)
+	r.typeLabel.Move(typePos)
+	r.typeLabel.Resize(fyne.NewSize(float32(typeColumnWidth), r.typeLabel.MinSize().Height))
+
+	// Колонка значения (Entry) - занимает оставшееся пространство
+	entryX := float32(nameColumnWidth + typeColumnWidth + columnSpacing*2)
+	entryWidth := size.Width - entryX
+	entryPos := fyne.NewPos(entryX, (size.Height-r.entry.MinSize().Height)/2)
+	r.entry.Move(entryPos)
+	r.entry.Resize(fyne.NewSize(entryWidth, r.entry.MinSize().Height))
+}
+
+func (r *editableNodeRenderer) MinSize() fyne.Size {
+	nameSize := r.nameLabel.MinSize()
+	typeSize := r.typeLabel.MinSize()
+	entrySize := r.entry.MinSize()
+
+	width := float32(nameColumnWidth + typeColumnWidth + int(entrySize.Width) + columnSpacing*2)
+	height := fyne.Max(fyne.Max(nameSize.Height, typeSize.Height), entrySize.Height)
+
+	return fyne.NewSize(width, height)
+}
+
+func (r *editableNodeRenderer) Refresh() {
+	r.nameLabel.Refresh()
+	r.typeLabel.Refresh()
+	r.entry.Refresh()
+}
+
+func (r *editableNodeRenderer) Objects() []fyne.CanvasObject {
+	return r.objects
+}
+
+func (r *editableNodeRenderer) Destroy() {}
 
 // NewProtobufTreeAdapter создает новый адаптер для дерева
 func NewProtobufTreeAdapter(tree *protobuf.TreeNode) *ProtobufTreeAdapter {
-	return &ProtobufTreeAdapter{tree: tree}
+	return &ProtobufTreeAdapter{
+		tree:        tree,
+		editWidgets: make(map[widget.TreeNodeID]*EditableNodeWidget),
+	}
 }
 
 // ChildUIDs возвращает UID дочерних узлов
@@ -65,10 +164,17 @@ func (a *ProtobufTreeAdapter) IsBranch(uid widget.TreeNodeID) bool {
 
 // CreateNode создает виджет для узла
 func (a *ProtobufTreeAdapter) CreateNode(branch bool) fyne.CanvasObject {
-	// Создаем контейнер с информацией о поле
-	label := widget.NewLabel("")
-	label.Wrapping = fyne.TextWrapWord
-	return label
+	// Для веток (сообщений) используем просто Label
+	if branch {
+		label := widget.NewLabel("")
+		label.Wrapping = fyne.TextWrapWord
+		return label
+	}
+
+	// Для листьев создаем редактируемый виджет
+	// UID будет установлен в UpdateNode
+	ew := NewEditableNodeWidget("", a)
+	return ew
 }
 
 // UpdateNode обновляет виджет узла
@@ -87,29 +193,94 @@ func (a *ProtobufTreeAdapter) UpdateNode(uid widget.TreeNodeID, branch bool, obj
 		return
 	}
 
-	label := obj.(*widget.Label)
-
-	// Формируем текст для отображения
-	text := ""
-	if node.Name == "root" {
-		text = "Protobuf Root"
-		if len(node.Children) == 0 {
-			text = "Protobuf Root (no data)"
+	// Для веток (сообщений) используем Label
+	if branch || node.Name == "root" {
+		if label, ok := obj.(*widget.Label); ok {
+			text := ""
+			if node.Name == "root" {
+				text = "Protobuf Root"
+				if len(node.Children) == 0 {
+					text = "Protobuf Root (no data)"
+				}
+			} else {
+				text = fmt.Sprintf("%s (field_%d, %s)", node.Name, node.FieldNum, node.Type)
+				if node.IsRepeated {
+					text += " [repeated]"
+				}
+				if len(node.Children) > 0 {
+					text += fmt.Sprintf(" [%d children]", len(node.Children))
+				}
+			}
+			label.SetText(text)
 		}
-	} else {
-		text = fmt.Sprintf("%s (field_%d, %s)", node.Name, node.FieldNum, node.Type)
-		if node.Value != nil {
-			text += fmt.Sprintf(": %v", node.Value)
-		}
-		if node.IsRepeated {
-			text += " [repeated]"
-		}
-		if len(node.Children) > 0 {
-			text += fmt.Sprintf(" [%d children]", len(node.Children))
-		}
+		return
 	}
 
-	label.SetText(text)
+	// Для листьев (примитивных значений) используем EditableNodeWidget
+	if editWidget, ok := obj.(*EditableNodeWidget); ok {
+		editWidget.uid = actualUID
+		a.editWidgets[actualUID] = editWidget
+
+		// Устанавливаем имя поля в первую колонку
+		nameText := fmt.Sprintf("field_%d", node.FieldNum)
+		editWidget.nameLabel.SetText(nameText)
+
+		// Устанавливаем тип поля во вторую колонку
+		typeText := node.Type
+		editWidget.typeLabel.SetText(typeText)
+
+		// Устанавливаем значение в Entry (третья колонка)
+		valueStr := ""
+		if node.Value != nil {
+			switch v := node.Value.(type) {
+			case string:
+				valueStr = v
+			case bool:
+				if v {
+					valueStr = "true"
+				} else {
+					valueStr = "false"
+				}
+			default:
+				valueStr = fmt.Sprintf("%v", v)
+			}
+		}
+		editWidget.entry.SetText(valueStr)
+
+		// Обновляем обработчик с правильным типом
+		fieldType := node.Type
+		editWidget.entry.OnChanged = func(value string) {
+			a.updateNodeValue(actualUID, value, fieldType)
+		}
+		editWidget.Refresh()
+		return
+	}
+}
+
+// updateNodeValue обновляет значение узла
+func (a *ProtobufTreeAdapter) updateNodeValue(uid widget.TreeNodeID, valueStr string, fieldType string) {
+	node := a.getNodeByUID(uid)
+	if node == nil {
+		return
+	}
+
+	// Парсим значение в зависимости от типа
+	switch fieldType {
+	case "string":
+		node.Value = valueStr
+	case "number":
+		node.Value = valueStr
+	case "bool":
+		if valueStr == "true" || valueStr == "1" {
+			node.Value = true
+		} else if valueStr == "false" || valueStr == "0" {
+			node.Value = false
+		} else {
+			node.Value = valueStr
+		}
+	default:
+		node.Value = valueStr
+	}
 }
 
 // getNodeByUID получает узел по UID

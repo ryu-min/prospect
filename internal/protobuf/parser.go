@@ -251,3 +251,111 @@ func (p *Parser) ApplySchema(tree *TreeNode, schemaPath string) (*TreeNode, erro
 func (n *TreeNode) ToJSON() ([]byte, error) {
 	return json.MarshalIndent(n, "", "  ")
 }
+
+// SerializeRaw сериализует дерево обратно в бинарный формат protobuf
+func (p *Parser) SerializeRaw(tree *TreeNode) ([]byte, error) {
+	// Преобразуем дерево в текстовый формат protoc
+	textFormat := p.treeToTextFormat(tree)
+
+	// Используем protoc --encode_raw для кодирования
+	cmd := exec.Command(p.protocPath, "--encode_raw")
+	cmd.Stdin = strings.NewReader(textFormat)
+
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("error encoding protobuf: %w", err)
+	}
+
+	return output, nil
+}
+
+// treeToTextFormat преобразует дерево в текстовый формат protoc
+func (p *Parser) treeToTextFormat(node *TreeNode) string {
+	if node == nil {
+		return ""
+	}
+
+	var result strings.Builder
+	p.writeNodeToTextFormat(&result, node, 0)
+	return result.String()
+}
+
+// writeNodeToTextFormat рекурсивно записывает узел в текстовый формат
+func (p *Parser) writeNodeToTextFormat(builder *strings.Builder, node *TreeNode, indent int) {
+	if node.Name == "root" {
+		// Пропускаем root, обрабатываем только детей
+		for _, child := range node.Children {
+			p.writeNodeToTextFormat(builder, child, indent)
+		}
+		return
+	}
+
+	// Добавляем отступ
+	for i := 0; i < indent; i++ {
+		builder.WriteString("  ")
+	}
+
+	// Если это сообщение, открываем блок
+	if node.Type == "message" || len(node.Children) > 0 {
+		builder.WriteString(fmt.Sprintf("%d {\n", node.FieldNum))
+		// Рекурсивно обрабатываем детей
+		for _, child := range node.Children {
+			p.writeNodeToTextFormat(builder, child, indent+1)
+		}
+		// Закрываем блок
+		for i := 0; i < indent; i++ {
+			builder.WriteString("  ")
+		}
+		builder.WriteString("}\n")
+	} else {
+		// Примитивное значение
+		builder.WriteString(fmt.Sprintf("%d: ", node.FieldNum))
+		if node.Value != nil {
+			// Обрабатываем в зависимости от типа поля
+			if node.Type == "string" {
+				// Строка - всегда в кавычках
+				builder.WriteString(fmt.Sprintf("\"%s\"", fmt.Sprintf("%v", node.Value)))
+			} else if node.Type == "bool" {
+				// Bool - true/false
+				if v, ok := node.Value.(bool); ok {
+					if v {
+						builder.WriteString("true")
+					} else {
+						builder.WriteString("false")
+					}
+				} else {
+					// Если сохранено как строка
+					valueStr := fmt.Sprintf("%v", node.Value)
+					if valueStr == "true" || valueStr == "1" {
+						builder.WriteString("true")
+					} else {
+						builder.WriteString("false")
+					}
+				}
+			} else if node.Type == "number" {
+				// Число - без кавычек
+				builder.WriteString(fmt.Sprintf("%v", node.Value))
+			} else {
+				// Неизвестный тип - пытаемся определить
+				switch v := node.Value.(type) {
+				case string:
+					// Проверяем, является ли это числом
+					if isNumeric(v) {
+						builder.WriteString(v)
+					} else {
+						builder.WriteString(fmt.Sprintf("\"%s\"", v))
+					}
+				case bool:
+					if v {
+						builder.WriteString("true")
+					} else {
+						builder.WriteString("false")
+					}
+				default:
+					builder.WriteString(fmt.Sprintf("%v", v))
+				}
+			}
+		}
+		builder.WriteString("\n")
+	}
+}

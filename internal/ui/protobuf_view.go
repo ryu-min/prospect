@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"log"
+	"path/filepath"
 	"strings"
 
 	"prospect/internal/protobuf"
@@ -10,6 +11,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -25,6 +27,7 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 
 	// Дерево для отображения
 	var currentTree *protobuf.TreeNode
+	var currentFilePath string // Путь к текущему открытому файлу
 
 	// Виджет дерева для визуального отображения
 	treeWidget := CreateProtobufTree(nil)
@@ -37,6 +40,7 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 
 	// Объявляем переменные для кнопок и панели (определяются позже)
 	var openBtn *widget.Button
+	var saveBtn *widget.Button
 	var applySchemaBtn *widget.Button
 	var exportJSONBtn *widget.Button
 	var buttonPanel fyne.CanvasObject
@@ -54,6 +58,9 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 				return
 			}
 			defer reader.Close()
+
+			// Сохраняем путь к файлу
+			currentFilePath = reader.URI().Path()
 
 			// Сохраняем последнюю директорию
 			dialogState.SetLastOpenDir(reader.URI())
@@ -202,6 +209,65 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 		fileDialog.Show()
 	})
 
+	// Кнопка сохранения
+	saveBtn = widget.NewButton("Save", func() {
+		if currentTree == nil {
+			dialog.ShowInformation("Information", "Please open a protobuf file first", parentWindow)
+			return
+		}
+
+		// Сериализуем дерево в бинарный формат
+		binaryData, err := parser.SerializeRaw(currentTree)
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("serialization error: %w", err), parentWindow)
+			return
+		}
+
+		// Создаем диалог сохранения
+		saveDialog := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
+			if err != nil {
+				log.Printf("Save dialog error: %v", err)
+				dialog.ShowError(err, parentWindow)
+				return
+			}
+			if writer == nil {
+				return
+			}
+			defer writer.Close()
+
+			// Сохраняем путь к файлу
+			currentFilePath = writer.URI().Path()
+
+			// Сохраняем последнюю директорию
+			dialogState.SetLastSaveDir(writer.URI())
+
+			// Записываем данные
+			if _, err := writer.Write(binaryData); err != nil {
+				dialog.ShowError(fmt.Errorf("write error: %w", err), parentWindow)
+				return
+			}
+
+			dialog.ShowInformation("Success", "Protobuf file saved", parentWindow)
+			log.Printf("Protobuf file saved: %s", currentFilePath)
+		}, parentWindow)
+
+		// Устанавливаем начальную директорию
+		if lastDir := dialogState.GetLastSaveDir(); lastDir != nil {
+			saveDialog.SetLocation(lastDir)
+		} else if currentFilePath != "" {
+			// Используем директорию текущего файла
+			dirPath := filepath.Dir(currentFilePath)
+			uri := storage.NewFileURI(dirPath)
+			if listableURI, err := storage.ListerForURI(uri); err == nil {
+				saveDialog.SetLocation(listableURI)
+			}
+		}
+
+		// Показываем диалог
+		saveDialog.Resize(dialogState.GetDialogSize())
+		saveDialog.Show()
+	})
+
 	// Кнопка экспорта в JSON
 	exportJSONBtn = widget.NewButton("Export to JSON", func() {
 		if currentTree == nil {
@@ -249,6 +315,7 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 	// Панель кнопок
 	buttonPanel = container.NewHBox(
 		openBtn,
+		saveBtn,
 		applySchemaBtn,
 		exportJSONBtn,
 	)
