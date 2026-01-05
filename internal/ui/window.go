@@ -16,6 +16,12 @@ func NewMainWindow(fyneApp fyne.App) fyne.Window {
 	window.Resize(fyne.NewSize(800, 600))
 	window.CenterOnScreen()
 
+	// Устанавливаем иконку приложения
+	icon := createAppIcon()
+	if icon != nil {
+		window.SetIcon(icon)
+	}
+
 	// Создаем кастомный виджет табов с кнопками закрытия
 	browserTabs := NewBrowserTabs()
 	browserTabs.SetAddButtonCallback(func() {
