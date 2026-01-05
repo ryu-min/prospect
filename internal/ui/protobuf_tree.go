@@ -94,7 +94,7 @@ func (a *ProtobufTreeAdapter) UpdateNode(uid widget.TreeNodeID, branch bool, obj
 	if node.Name == "root" {
 		text = "Protobuf Root"
 		if len(node.Children) == 0 {
-			text = "Protobuf Root (нет данных)"
+			text = "Protobuf Root (no data)"
 		}
 	} else {
 		text = fmt.Sprintf("%s (field_%d, %s)", node.Name, node.FieldNum, node.Type)

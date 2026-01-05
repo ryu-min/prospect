@@ -18,7 +18,7 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 	// Парсер protobuf
 	parser, err := protobuf.NewParser()
 	if err != nil {
-		errorLabel := widget.NewLabel(fmt.Sprintf("Ошибка: %v", err))
+		errorLabel := widget.NewLabel(fmt.Sprintf("Error: %v", err))
 		errorLabel.Wrapping = fyne.TextWrapWord
 		return container.NewPadded(errorLabel)
 	}
@@ -42,11 +42,11 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 	var buttonPanel fyne.CanvasObject
 
 	// Кнопка открытия файла
-	openBtn = widget.NewButton("Открыть бинарный protobuf файл", func() {
+	openBtn = widget.NewButton("Open binary protobuf file", func() {
 		// Создаем диалог с сохранением позиции
 		fileDialog := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
 			if err != nil {
-				log.Printf("Ошибка диалога: %v", err)
+				log.Printf("Dialog error: %v", err)
 				dialog.ShowError(err, parentWindow)
 				return
 			}
@@ -72,15 +72,13 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 			}
 
 			// Парсим protobuf
-			log.Printf("Парсинг protobuf файла: %s", reader.URI().Path())
+			log.Printf("Parsing protobuf file: %s", reader.URI().Path())
 
-			// ВРЕМЕННО: Используем фейковое дерево для тестирования виджета
-			// tree, err := parser.ParseRaw(data)
-			// if err != nil {
-			// 	dialog.ShowError(fmt.Errorf("ошибка парсинга: %w", err), parentWindow)
-			// 	return
-			// }
-			tree := protobuf.CreateFakeTree()
+			tree, err := parser.ParseRaw(data)
+			if err != nil {
+				dialog.ShowError(fmt.Errorf("parsing error: %w", err), parentWindow)
+				return
+			}
 
 			currentTree = tree
 
@@ -125,9 +123,9 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 			if browserTabs != nil {
 				browserTabs.UpdateTabContent(container.NewPadded(newBorder))
 			} else {
-				log.Printf("Ошибка: browserTabs is nil")
+				log.Printf("Error: browserTabs is nil")
 			}
-			log.Printf("Protobuf файл успешно распарсен, дерево обновлено")
+			log.Printf("Protobuf file parsed successfully, tree updated")
 		}, parentWindow)
 
 		// Устанавливаем начальную директорию
@@ -141,9 +139,9 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 	})
 
 	// Кнопка применения схемы
-	applySchemaBtn = widget.NewButton("Применить proto схему", func() {
+	applySchemaBtn = widget.NewButton("Apply proto schema", func() {
 		if currentTree == nil {
-			dialog.ShowInformation("Информация", "Сначала откройте protobuf файл", parentWindow)
+			dialog.ShowInformation("Information", "Please open a protobuf file first", parentWindow)
 			return
 		}
 
@@ -161,12 +159,12 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 			dialogState.SetLastSchemaDir(reader.URI())
 
 			schemaPath := reader.URI().Path()
-			log.Printf("Применение схемы: %s", schemaPath)
+			log.Printf("Applying schema: %s", schemaPath)
 
 			// TODO: Реализовать применение схемы
 			tree, err := parser.ApplySchema(currentTree, schemaPath)
 			if err != nil {
-				dialog.ShowError(fmt.Errorf("ошибка применения схемы: %w", err), parentWindow)
+				dialog.ShowError(fmt.Errorf("error applying schema: %w", err), parentWindow)
 				return
 			}
 
@@ -191,7 +189,7 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 			if browserTabs != nil {
 				browserTabs.UpdateTabContent(container.NewPadded(newBorder))
 			}
-			log.Printf("Схема успешно применена, дерево обновлено")
+			log.Printf("Schema applied successfully, tree updated")
 		}, parentWindow)
 
 		// Устанавливаем начальную директорию
@@ -205,15 +203,15 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 	})
 
 	// Кнопка экспорта в JSON
-	exportJSONBtn = widget.NewButton("Экспорт в JSON", func() {
+	exportJSONBtn = widget.NewButton("Export to JSON", func() {
 		if currentTree == nil {
-			dialog.ShowInformation("Информация", "Сначала откройте protobuf файл", parentWindow)
+			dialog.ShowInformation("Information", "Please open a protobuf file first", parentWindow)
 			return
 		}
 
 		jsonData, err := currentTree.ToJSON()
 		if err != nil {
-			dialog.ShowError(fmt.Errorf("ошибка экспорта: %w", err), parentWindow)
+			dialog.ShowError(fmt.Errorf("export error: %w", err), parentWindow)
 			return
 		}
 
@@ -231,11 +229,11 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 			dialogState.SetLastSaveDir(writer.URI())
 
 			if _, err := writer.Write(jsonData); err != nil {
-				dialog.ShowError(fmt.Errorf("ошибка записи: %w", err), parentWindow)
+				dialog.ShowError(fmt.Errorf("write error: %w", err), parentWindow)
 				return
 			}
 
-			dialog.ShowInformation("Успех", "JSON файл сохранен", parentWindow)
+			dialog.ShowInformation("Success", "JSON file saved", parentWindow)
 		}, parentWindow)
 
 		// Устанавливаем начальную директорию
@@ -275,7 +273,7 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 // formatTree форматирует дерево для отображения
 func formatTree(node *protobuf.TreeNode, indent int) string {
 	if node == nil {
-		return "(пустое дерево)\n"
+		return "(empty tree)\n"
 	}
 
 	indentStr := ""
@@ -288,7 +286,7 @@ func formatTree(node *protobuf.TreeNode, indent int) string {
 		result += "Protobuf Root\n"
 		result += strings.Repeat("=", 50) + "\n"
 		if len(node.Children) == 0 {
-			result += "(нет данных)\n"
+			result += "(no data)\n"
 			return result
 		}
 	} else {
@@ -365,7 +363,7 @@ func buildTableData(node *protobuf.TreeNode) []TableRow {
 // createTableWidget создает виджет таблицы из данных
 func createTableWidget(data []TableRow) fyne.CanvasObject {
 	if len(data) == 0 {
-		return widget.NewLabel("(нет данных)")
+		return widget.NewLabel("(no data)")
 	}
 
 	// Создаем заголовки таблицы (жирным шрифтом)

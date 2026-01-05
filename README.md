@@ -1,86 +1,43 @@
-# Prospect - Система управления вкладками
+# Prospect
 
-Приложение на Go с использованием Fyne для управления вкладками с различными виджетами.
+A desktop application for working with binary protobuf files.
 
-## Структура проекта
+## Description
 
-```
-prospect/
-├── cmd/
-│   └── prospect/
-│       └── main.go          # Точка входа приложения
-├── internal/
-│   ├── app/
-│   │   └── app.go           # Основной класс приложения
-│   └── ui/
-│       └── window.go        # Создание окна и функции управления вкладками
-├── go.mod
-├── go.sum
-└── README.md
-```
+Prospect is a tool that allows you to open, parse, and view binary Protocol Buffer files. It provides a tree view of the protobuf message structure and allows exporting the parsed data to JSON format.
 
-## Архитектура
-
-### Управление вкладками
-
-Приложение использует `container.AppTabs` напрямую из Fyne для управления вкладками. Все функции создания вкладок находятся в пакете `internal/ui`.
-
-**Доступные функции:**
-- `ui.CreateTab(tabs)` - создает новую вкладку по умолчанию
-- `ui.AddTab(tabs, name, content)` - универсальная функция добавления вкладки с произвольным содержимым
-
-## Использование
-
-### Запуск приложения
-
-```bash
-# Напрямую
-$env:CGO_ENABLED=1; go run ./cmd/prospect
-```
-
-### Создание вкладки с произвольным содержимым
-
-Используйте функцию `AddTab` для создания вкладки с любым содержимым:
-
-```go
-import "prospect/internal/ui"
-
-tabs := container.NewAppTabs()
-
-// Создание вкладки с произвольным содержимым
-content := widget.NewLabel("Мое содержимое")
-ui.AddTab(tabs, "Моя вкладка", content)
-```
-
-### Работа с вкладками напрямую
-
-```go
-import "prospect/internal/ui"
-
-// Создание контейнера вкладок
-tabs := container.NewAppTabs()
-
-// Добавление вкладки с произвольным содержимым
-ui.AddTab(tabs, "Имя вкладки", widget.NewLabel("Содержимое"))
-
-// Создание вкладки по умолчанию
-ui.CreateTab(tabs)
-```
-
-## Требования
+## Requirements
 
 - Go 1.21+
-- Компилятор C (gcc) для Windows (для работы Fyne)
-- Fyne v2.4.5+
+- C compiler (gcc) for Windows (required for Fyne)
+- protoc (Protocol Buffer compiler)
 
-## Установка зависимостей
+## Installation
 
 ```bash
 go mod tidy
 ```
 
-## Сборка
+## Building
 
 ```bash
 $env:CGO_ENABLED=1; go build -o prospect.exe ./cmd/prospect
 ```
+
+## Running
+
+```bash
+$env:CGO_ENABLED=1; go run ./cmd/prospect
+```
+
+## Installing protoc
+
+On Windows, you can install protoc via:
+
+```bash
+scoop install protobuf
+```
+
+---
+
+This application was created with vibe code.

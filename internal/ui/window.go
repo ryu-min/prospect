@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"log"
 
 	"fyne.io/fyne/v2"
@@ -13,7 +12,7 @@ var tabCounter int = 0
 
 // NewMainWindow создает главное окно приложения
 func NewMainWindow(fyneApp fyne.App) fyne.Window {
-	window := fyneApp.NewWindow("Prospect - Система вкладок")
+	window := fyneApp.NewWindow("prospect")
 	window.Resize(fyne.NewSize(800, 600))
 	window.CenterOnScreen()
 
@@ -35,36 +34,35 @@ func NewMainWindow(fyneApp fyne.App) fyne.Window {
 func AddTab(tabs *container.AppTabs, name string, content fyne.CanvasObject) {
 	tabCounter++
 	if name == "" {
-		name = fmt.Sprintf("Вкладка #%d", tabCounter)
+		name = "Tab"
 	}
 
 	newTab := container.NewTabItem(name, content)
 	tabs.Append(newTab)
 	tabs.Select(newTab)
-	log.Printf("Добавлена вкладка: %s", name)
+	log.Printf("Tab added: %s", name)
 }
 
 // CreateTab создает новую вкладку по умолчанию
 func CreateTab(tabs *container.AppTabs) {
 	tabCounter++
-	tabName := fmt.Sprintf("Вкладка #%d", tabCounter)
+	tabName := "Tab"
 
 	textArea := widget.NewMultiLineEntry()
 	textArea.SetText("Новая вкладка\n\nВы можете редактировать этот текст.")
 	textArea.Wrapping = fyne.TextWrapWord
 
-	clearBtn := widget.NewButton("Очистить", func() {
+	clearBtn := widget.NewButton("Clear", func() {
 		textArea.SetText("")
-		fmt.Println("[INFO] Текст очищен")
 	})
 
-	resetBtn := widget.NewButton("Сбросить", func() {
-		textArea.SetText("Новая вкладка\n\nВы можете редактировать этот текст.")
-		log.Printf("Текст сброшен")
+	resetBtn := widget.NewButton("Reset", func() {
+		textArea.SetText("New tab\n\nYou can edit this text.")
+		log.Printf("Text reset")
 	})
 
 	topContainer := container.NewVBox(
-		widget.NewLabel("Редактор текста:"),
+		widget.NewLabel("Text editor:"),
 	)
 
 	bottomContainer := container.NewHBox(
@@ -117,5 +115,5 @@ func CreateTabWithClose(browserTabs *BrowserTabs) {
 // CreateProtobufTab создает вкладку для просмотра protobuf файлов
 func CreateProtobufTab(browserTabs *BrowserTabs, fyneApp fyne.App, parentWindow fyne.Window) {
 	content := ProtobufView(fyneApp, parentWindow, browserTabs)
-	browserTabs.AddTab("Protobuf Viewer", content)
+	browserTabs.AddTab("Tab", content)
 }

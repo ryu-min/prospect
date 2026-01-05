@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"log"
 
 	"fyne.io/fyne/v2"
@@ -37,7 +36,7 @@ func NewBrowserTabs() *BrowserTabs {
 func (bt *BrowserTabs) AddTab(title string, content fyne.CanvasObject) {
 	tabCounter++
 	if title == "" {
-		title = fmt.Sprintf("Вкладка #%d", tabCounter)
+		title = "Tab"
 	}
 
 	tab := &TabData{
@@ -47,13 +46,13 @@ func (bt *BrowserTabs) AddTab(title string, content fyne.CanvasObject) {
 	bt.tabs = append(bt.tabs, tab)
 	bt.selectedTab = len(bt.tabs) - 1
 	bt.Refresh()
-	log.Printf("Добавлена вкладка: %s", title)
+	log.Printf("Tab added: %s", title)
 }
 
 // RemoveTab удаляет вкладку по индексу
 func (bt *BrowserTabs) RemoveTab(index int) {
 	if index < 0 || index >= len(bt.tabs) {
-		log.Printf("Ошибка: попытка удалить несуществующую вкладку: индекс %d, всего вкладок: %d", index, len(bt.tabs))
+		log.Printf("Error: attempt to remove non-existent tab: index %d, total tabs: %d", index, len(bt.tabs))
 		return
 	}
 
@@ -82,7 +81,7 @@ func (bt *BrowserTabs) RemoveTab(index int) {
 		// Если bt.selectedTab < index, ничего не меняем
 	}
 
-	log.Printf("Вкладка '%s' удалена, осталось вкладок: %d", title, len(bt.tabs))
+	log.Printf("Tab '%s' removed, remaining tabs: %d", title, len(bt.tabs))
 	bt.Refresh()
 }
 
@@ -105,7 +104,7 @@ func (bt *BrowserTabs) UpdateTabContent(content fyne.CanvasObject) {
 		bt.tabs[bt.selectedTab].content = content
 		bt.Refresh()
 	} else {
-		log.Printf("Ошибка: не удалось обновить контент: selectedTab=%d, len(tabs)=%d", bt.selectedTab, len(bt.tabs))
+		log.Printf("Error: failed to update content: selectedTab=%d, len(tabs)=%d", bt.selectedTab, len(bt.tabs))
 	}
 }
 
@@ -193,7 +192,7 @@ func (r *browserTabsRenderer) Refresh() {
 			r.contentArea.Refresh()
 		}
 	} else {
-		r.contentArea = widget.NewLabel("Нет открытых вкладок")
+		r.contentArea = widget.NewLabel("No open tabs")
 	}
 
 	// Основной контейнер: заголовок сверху, содержимое снизу
