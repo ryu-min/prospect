@@ -103,17 +103,33 @@ func (p *Parser) parseProtocOutput(output string) (*TreeNode, error) {
 	}
 
 	stack := []*TreeNode{root}
-	stackIndents := []int{0} // Отслеживаем отступы для каждого уровня стека
+	stackIndents := []int{-1} // root имеет отступ -1, чтобы любое поле с отступом >= 0 было его ребенком
 
 	for _, line := range lines {
 		originalLine := line
-		line = strings.TrimRight(line, " \t")
+		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
 
 		indent := getIndentLevel(originalLine)
-		trimmedLine := strings.TrimLeft(line, " \t")
+		trimmedLine := line
+
+		// Если строка == "}", это конец вложенного сообщения
+		if trimmedLine == "}" {
+			if len(stack) > 1 {
+				stack = stack[:len(stack)-1]
+				stackIndents = stackIndents[:len(stackIndents)-1]
+			}
+			continue
+		}
+
+		// Если отступ меньше или равен текущему уровню стека, выходим из вложенных сообщений
+		// Мы должны найти родителя, чей отступ МЕНЬШЕ текущего
+		for len(stack) > 1 && indent <= stackIndents[len(stackIndents)-1] {
+			stack = stack[:len(stack)-1]
+			stackIndents = stackIndents[:len(stackIndents)-1]
+		}
 
 		// Если строка заканчивается на "{", это начало вложенного сообщения
 		if strings.HasSuffix(trimmedLine, "{") {
@@ -126,16 +142,7 @@ func (p *Parser) parseProtocOutput(output string) (*TreeNode, error) {
 				Children:   make([]*TreeNode, 0),
 				IsRepeated: false,
 			}
-			// Если отступ меньше текущего уровня стека, выходим из вложенных сообщений
-			for len(stack) > 1 && len(stackIndents) > 1 {
-				lastIndent := stackIndents[len(stackIndents)-1]
-				if indent <= lastIndent {
-					stack = stack[:len(stack)-1]
-					stackIndents = stackIndents[:len(stackIndents)-1]
-				} else {
-					break
-				}
-			}
+			
 			if len(stack) > 0 {
 				stack[len(stack)-1].AddChild(node)
 			}
@@ -146,43 +153,15 @@ func (p *Parser) parseProtocOutput(output string) (*TreeNode, error) {
 			continue
 		}
 
-		// Если строка == "}", это конец вложенного сообщения
-		if trimmedLine == "}" {
-			if len(stack) > 1 {
-				stack = stack[:len(stack)-1]
-				stackIndents = stackIndents[:len(stackIndents)-1]
-			}
-			continue
-		}
-
-		// Если отступ меньше текущего уровня стека, выходим из вложенных сообщений
-		// Нужно найти правильного родителя на основе отступа
-		for len(stack) > 1 && len(stackIndents) > 1 {
-			lastIndent := stackIndents[len(stackIndents)-1]
-			// Если текущий отступ меньше или равен отступу последнего элемента стека,
-			// значит мы вышли из этого сообщения - удаляем его из стека
-			if indent <= lastIndent {
-				stack = stack[:len(stack)-1]
-				stackIndents = stackIndents[:len(stackIndents)-1]
-			} else {
-				// Отступ больше - мы все еще внутри сообщения
-				break
-			}
-		}
-
 		// Парсим строку
 		node := p.parseLine(trimmedLine)
 		if node != nil {
 			// Добавляем в текущий узел стека (после корректировки стека)
 			if len(stack) > 0 {
-				parentName := stack[len(stack)-1].Name
-				stack[len(stack)-1].AddChild(node)
-				parentIndent := 0
-				if len(stackIndents) > 0 {
-					parentIndent = stackIndents[len(stackIndents)-1]
-				}
+				parent := stack[len(stack)-1]
+				parent.AddChild(node)
 				fmt.Fprintf(os.Stdout, "[DEBUG] Добавлен узел: %s (field_%d, %s) в %s (indent=%d, parentIndent=%d, stackSize=%d)\n",
-					node.Name, node.FieldNum, node.Type, parentName, indent, parentIndent, len(stack))
+					node.Name, node.FieldNum, node.Type, parent.Name, indent, stackIndents[len(stackIndents)-1], len(stack))
 			}
 		}
 	}
@@ -203,37 +182,11 @@ func getIndentLevel(line string) int {
 	return indent
 }
 
-// parseLine парсит одну строку вывода protoc
+// parseLine парсит одну строку вывода protoc (только пары field: value)
 func (p *Parser) parseLine(line string) *TreeNode {
-	// Формат protoc --decode_raw:
-	//   field_number: value
-	//   field_number {
-	//     nested_field: value
-	//   }
-	// Примеры:
-	//   1: "hello"
-	//   2: 42
-	//   3: 1
-	//   4 {
-	//     5: "nested"
-	//   }
-
 	line = strings.TrimSpace(line)
-	if line == "" || line == "{" || line == "}" {
+	if line == "" || line == "{" || line == "}" || strings.HasSuffix(line, "{") {
 		return nil
-	}
-
-	// Проверяем, является ли это началом вложенного сообщения
-	if strings.HasSuffix(line, "{") {
-		fieldPart := strings.TrimSpace(strings.TrimSuffix(line, "{"))
-		fieldNum := parseInt(fieldPart)
-		return &TreeNode{
-			Name:       fmt.Sprintf("field_%d", fieldNum),
-			Type:       "message",
-			FieldNum:   fieldNum,
-			Children:   make([]*TreeNode, 0),
-			IsRepeated: false,
-		}
 	}
 
 	// Парсим поле со значением

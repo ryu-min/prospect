@@ -28,7 +28,7 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 
 	// Виджет дерева для визуального отображения
 	treeWidget := CreateProtobufTree(nil)
-	
+
 	// Контейнер для дерева (будет обновляться)
 	treeScrollContainer := container.NewScroll(treeWidget)
 
@@ -77,49 +77,53 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 
 			// Парсим protobuf
 			fmt.Fprintf(os.Stdout, "[INFO] Парсинг protobuf файла: %s\n", reader.URI().Path())
-			tree, err := parser.ParseRaw(data)
-			if err != nil {
-				dialog.ShowError(fmt.Errorf("ошибка парсинга: %w", err), parentWindow)
-				return
-			}
+
+			// ВРЕМЕННО: Используем фейковое дерево для тестирования виджета
+			// tree, err := parser.ParseRaw(data)
+			// if err != nil {
+			// 	dialog.ShowError(fmt.Errorf("ошибка парсинга: %w", err), parentWindow)
+			// 	return
+			// }
+			tree := protobuf.CreateFakeTree()
+			fmt.Fprintf(os.Stdout, "[DEBUG] Используется ФЕЙКОВОЕ дерево для тестирования виджета\n")
 
 			currentTree = tree
 			fmt.Fprintf(os.Stdout, "[DEBUG] Дерево распарсено, узлов в root: %d\n", len(tree.Children))
-			
+
 			// ШАГ 3: Отображаем дерево в виде дерева (widget.Tree)
 			adapter := NewProtobufTreeAdapter(tree)
 			adapter.DebugPrintTree() // Отладочный вывод структуры дерева
-			
+
 			// Создаем виджет дерева
 			newTreeWidget := widget.NewTree(adapter.ChildUIDs, adapter.IsBranch, adapter.CreateNode, adapter.UpdateNode)
-			
+
 			// Проверяем, что root имеет детей и открываем его
 			// В Fyne widget.Tree использует пустую строку "" для root
 			rootChildren := adapter.ChildUIDs("")
 			fmt.Fprintf(os.Stdout, "[DEBUG] Root children UIDs: %v\n", rootChildren)
-			
+
 			// ВАЖНО: Открываем root ДО добавления в контейнер (используем пустую строку)
 			if len(rootChildren) > 0 {
 				fmt.Fprintf(os.Stdout, "[DEBUG] Открываем ветку root (пустая строка)\n")
 				newTreeWidget.OpenBranch("")
 			}
-			
+
 			// Обновляем виджет дерева
 			newTreeWidget.Refresh()
 			fmt.Fprintf(os.Stdout, "[DEBUG] Виджет дерева создан и обновлен\n")
-			
+
 			treeWidget = newTreeWidget
-			
+
 			// Обновляем scroll контейнер с деревом
 			newScrollContainer := container.NewScroll(newTreeWidget)
 			newScrollContainer.Refresh()
 			treeScrollContainer = newScrollContainer
-			
+
 			// ВАЖНО: Принудительно запрашиваем данные для root
 			fmt.Fprintf(os.Stdout, "[DEBUG] Принудительно запрашиваем данные для root\n")
 			_ = adapter.ChildUIDs("root")
 			_ = adapter.IsBranch("root")
-			
+
 			// Обновляем Border контейнер
 			newBorder := container.NewBorder(
 				buttonPanel,
@@ -266,14 +270,14 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 	// Основной контейнер - создаем функцию для обновления
 	createMainBorder := func() fyne.CanvasObject {
 		return container.NewBorder(
-			buttonPanel,           // верх - кнопки
-			nil,                   // низ
-			nil,                   // лево
-			nil,                   // право
-			treeScrollContainer,   // центр - дерево
+			buttonPanel,         // верх - кнопки
+			nil,                 // низ
+			nil,                 // лево
+			nil,                 // право
+			treeScrollContainer, // центр - дерево
 		)
 	}
-	
+
 	mainBorder := createMainBorder()
 	content := mainBorder
 
@@ -334,13 +338,13 @@ type TableRow struct {
 // buildTableData преобразует дерево в табличные данные
 func buildTableData(node *protobuf.TreeNode) []TableRow {
 	var rows []TableRow
-	
+
 	var traverse func(*protobuf.TreeNode, int)
 	traverse = func(n *protobuf.TreeNode, level int) {
 		if n == nil {
 			return
 		}
-		
+
 		// Пропускаем root узел, но обрабатываем его детей
 		if n.Name != "root" {
 			valueStr := ""
@@ -350,7 +354,7 @@ func buildTableData(node *protobuf.TreeNode) []TableRow {
 			if n.IsRepeated {
 				valueStr += " [repeated]"
 			}
-			
+
 			rows = append(rows, TableRow{
 				FieldName: n.Name,
 				FieldNum:  n.FieldNum,
@@ -359,13 +363,13 @@ func buildTableData(node *protobuf.TreeNode) []TableRow {
 				Children:  len(n.Children),
 			})
 		}
-		
+
 		// Рекурсивно обрабатываем дочерние узлы
 		for _, child := range n.Children {
 			traverse(child, level+1)
 		}
 	}
-	
+
 	traverse(node, 0)
 	return rows
 }
@@ -375,7 +379,7 @@ func createTableWidget(data []TableRow) fyne.CanvasObject {
 	if len(data) == 0 {
 		return widget.NewLabel("(нет данных)")
 	}
-	
+
 	// Создаем заголовки таблицы (жирным шрифтом)
 	headerName := widget.NewLabel("Field Name")
 	headerName.TextStyle = fyne.TextStyle{Bold: true}
@@ -387,7 +391,7 @@ func createTableWidget(data []TableRow) fyne.CanvasObject {
 	headerValue.TextStyle = fyne.TextStyle{Bold: true}
 	headerChildren := widget.NewLabel("Children")
 	headerChildren.TextStyle = fyne.TextStyle{Bold: true}
-	
+
 	header := container.NewGridWithColumns(5,
 		headerName,
 		headerNum,
@@ -395,7 +399,7 @@ func createTableWidget(data []TableRow) fyne.CanvasObject {
 		headerValue,
 		headerChildren,
 	)
-	
+
 	// Создаем строки таблицы
 	rows := make([]fyne.CanvasObject, 0, len(data))
 	for _, row := range data {
@@ -408,13 +412,12 @@ func createTableWidget(data []TableRow) fyne.CanvasObject {
 		)
 		rows = append(rows, rowContainer)
 	}
-	
+
 	// Объединяем заголовок и строки
 	content := container.NewVBox(header)
 	for _, row := range rows {
 		content.Add(row)
 	}
-	
+
 	return content
 }
-
