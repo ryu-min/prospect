@@ -62,6 +62,12 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 			// Сохраняем путь к файлу
 			currentFilePath = reader.URI().Path()
 
+			// Обновляем название вкладки с именем файла
+			if browserTabs != nil {
+				fileName := filepath.Base(currentFilePath)
+				browserTabs.UpdateTabTitle(fileName)
+			}
+
 			// Сохраняем последнюю директорию
 			dialogState.SetLastOpenDir(reader.URI())
 

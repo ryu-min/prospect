@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"log"
 
 	"fyne.io/fyne/v2"
@@ -9,6 +10,7 @@ import (
 )
 
 var tabCounter int = 0
+var undefinedTabCounter int = 0
 
 // NewMainWindow создает главное окно приложения
 func NewMainWindow(fyneApp fyne.App) fyne.Window {
@@ -114,12 +116,17 @@ func CreateTabWithClose(browserTabs *BrowserTabs) {
 	// Создаем protobuf viewer
 	content := ProtobufView(fyneApp, parentWindow, browserTabs)
 
-	// Добавляем вкладку
-	browserTabs.AddTab("", content)
+	// Добавляем вкладку с undefined_{number}
+	undefinedTabCounter++
+	tabTitle := fmt.Sprintf("undefined_%d", undefinedTabCounter)
+	browserTabs.AddTab(tabTitle, content)
 }
 
 // CreateProtobufTab создает вкладку для просмотра protobuf файлов
 func CreateProtobufTab(browserTabs *BrowserTabs, fyneApp fyne.App, parentWindow fyne.Window) {
 	content := ProtobufView(fyneApp, parentWindow, browserTabs)
-	browserTabs.AddTab("Tab", content)
+	// Используем undefined_{number} если файл не открыт
+	undefinedTabCounter++
+	tabTitle := fmt.Sprintf("undefined_%d", undefinedTabCounter)
+	browserTabs.AddTab(tabTitle, content)
 }

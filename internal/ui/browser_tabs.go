@@ -108,6 +108,16 @@ func (bt *BrowserTabs) UpdateTabContent(content fyne.CanvasObject) {
 	}
 }
 
+// UpdateTabTitle обновляет название выбранной вкладки
+func (bt *BrowserTabs) UpdateTabTitle(title string) {
+	if bt.selectedTab >= 0 && bt.selectedTab < len(bt.tabs) {
+		bt.tabs[bt.selectedTab].title = title
+		bt.Refresh()
+	} else {
+		log.Printf("Error: failed to update title: selectedTab=%d, len(tabs)=%d", bt.selectedTab, len(bt.tabs))
+	}
+}
+
 // CreateRenderer создает рендерер
 func (bt *BrowserTabs) CreateRenderer() fyne.WidgetRenderer {
 	// Создаем кнопку "+" один раз при создании рендерера
