@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -105,6 +106,10 @@ func (p *Parser) parseProtocOutput(output string) (*TreeNode, error) {
 	stack := []*TreeNode{root}
 	stackIndents := []int{-1} // root имеет отступ -1, чтобы любое поле с отступом >= 0 было его ребенком
 
+	// Отслеживаем повторяющиеся поля для каждого уровня стека
+	// Ключ: указатель на родительский узел + номер поля
+	fieldCounts := make(map[string]int)
+
 	for _, line := range lines {
 		originalLine := line
 		line = strings.TrimSpace(line)
@@ -157,6 +162,19 @@ func (p *Parser) parseProtocOutput(output string) (*TreeNode, error) {
 			// Добавляем в текущий узел стека (после корректировки стека)
 			if len(stack) > 0 {
 				parent := stack[len(stack)-1]
+				// Проверяем, является ли это поле repeated (встречается более одного раза)
+				fieldKey := fmt.Sprintf("%p_%d", parent, node.FieldNum)
+				fieldCounts[fieldKey]++
+				if fieldCounts[fieldKey] > 1 {
+					// Помечаем все экземпляры этого поля как repeated
+					node.IsRepeated = true
+					// Помечаем предыдущие экземпляры тоже
+					for _, child := range parent.Children {
+						if child.FieldNum == node.FieldNum {
+							child.IsRepeated = true
+						}
+					}
+				}
 				parent.AddChild(node)
 			}
 		}
@@ -254,15 +272,35 @@ func (n *TreeNode) ToJSON() ([]byte, error) {
 
 // SerializeRaw сериализует дерево обратно в бинарный формат protobuf
 func (p *Parser) SerializeRaw(tree *TreeNode) ([]byte, error) {
-	// Преобразуем дерево в текстовый формат protoc
-	textFormat := p.treeToTextFormat(tree)
+	// Генерируем временную proto схему на основе дерева
+	tempDir, err := os.MkdirTemp("", "prospect_proto_*")
+	if err != nil {
+		return nil, fmt.Errorf("error creating temp directory: %w", err)
+	}
+	defer os.RemoveAll(tempDir)
 
-	// Используем protoc --encode_raw для кодирования
-	cmd := exec.Command(p.protocPath, "--encode_raw")
+	// Генерируем proto схему
+	protoContent := p.generateProtoSchema(tree)
+	protoFile := filepath.Join(tempDir, "message.proto")
+	if err := os.WriteFile(protoFile, []byte(protoContent), 0644); err != nil {
+		return nil, fmt.Errorf("error writing proto file: %w", err)
+	}
+
+	// Преобразуем дерево в текстовый формат для protoc (с именами полей)
+	textFormat := p.treeToTextFormatWithNames(tree)
+
+	// Используем protoc --encode с сгенерированной схемой
+	messageName := "Message" // Имя сообщения в сгенерированной схеме
+	cmd := exec.Command(p.protocPath, "--encode", messageName, "--proto_path", tempDir, protoFile)
 	cmd.Stdin = strings.NewReader(textFormat)
 
 	output, err := cmd.Output()
 	if err != nil {
+		// Если есть ошибка, выводим stderr для отладки
+		if exitError, ok := err.(*exec.ExitError); ok {
+			stderr := string(exitError.Stderr)
+			return nil, fmt.Errorf("error encoding protobuf: %w\nstderr: %s\ntext format:\n%s\nproto schema:\n%s", err, stderr, textFormat, protoContent)
+		}
 		return nil, fmt.Errorf("error encoding protobuf: %w", err)
 	}
 
@@ -310,6 +348,212 @@ func (p *Parser) writeNodeToTextFormat(builder *strings.Builder, node *TreeNode,
 	} else {
 		// Примитивное значение
 		builder.WriteString(fmt.Sprintf("%d: ", node.FieldNum))
+		if node.Value != nil {
+			// Обрабатываем в зависимости от типа поля
+			if node.Type == "string" {
+				// Строка - всегда в кавычках
+				builder.WriteString(fmt.Sprintf("\"%s\"", fmt.Sprintf("%v", node.Value)))
+			} else if node.Type == "bool" {
+				// Bool - true/false
+				if v, ok := node.Value.(bool); ok {
+					if v {
+						builder.WriteString("true")
+					} else {
+						builder.WriteString("false")
+					}
+				} else {
+					// Если сохранено как строка
+					valueStr := fmt.Sprintf("%v", node.Value)
+					if valueStr == "true" || valueStr == "1" {
+						builder.WriteString("true")
+					} else {
+						builder.WriteString("false")
+					}
+				}
+			} else if node.Type == "number" {
+				// Число - без кавычек
+				builder.WriteString(fmt.Sprintf("%v", node.Value))
+			} else {
+				// Неизвестный тип - пытаемся определить
+				switch v := node.Value.(type) {
+				case string:
+					// Проверяем, является ли это числом
+					if isNumeric(v) {
+						builder.WriteString(v)
+					} else {
+						builder.WriteString(fmt.Sprintf("\"%s\"", v))
+					}
+				case bool:
+					if v {
+						builder.WriteString("true")
+					} else {
+						builder.WriteString("false")
+					}
+				default:
+					builder.WriteString(fmt.Sprintf("%v", v))
+				}
+			}
+		}
+		builder.WriteString("\n")
+	}
+}
+
+// generateProtoSchema генерирует proto схему на основе дерева
+func (p *Parser) generateProtoSchema(tree *TreeNode) string {
+	var builder strings.Builder
+	builder.WriteString("syntax = \"proto3\";\n\n")
+	builder.WriteString("message Message {\n")
+
+	fieldNum := 1
+	p.writeProtoFields(&builder, tree, &fieldNum)
+
+	builder.WriteString("}\n")
+	return builder.String()
+}
+
+// writeProtoFields рекурсивно записывает поля в proto схему
+func (p *Parser) writeProtoFields(builder *strings.Builder, node *TreeNode, fieldNum *int) {
+	if node.Name == "root" {
+		// Обрабатываем детей root
+		// Группируем поля по FieldNum для определения repeated
+		fieldMap := make(map[int][]*TreeNode)
+		for _, child := range node.Children {
+			fieldMap[child.FieldNum] = append(fieldMap[child.FieldNum], child)
+		}
+
+		// Записываем поля, группируя repeated
+		processedFields := make(map[int]bool)
+		for _, child := range node.Children {
+			if processedFields[child.FieldNum] {
+				continue // Уже обработали это поле
+			}
+			processedFields[child.FieldNum] = true
+
+			if len(fieldMap[child.FieldNum]) > 1 {
+				// Это repeated поле - записываем только один раз с модификатором repeated
+				child.IsRepeated = true
+				p.writeProtoField(builder, child, fieldNum)
+			} else {
+				// Обычное поле
+				p.writeProtoField(builder, child, fieldNum)
+			}
+		}
+		return
+	}
+
+	// Обрабатываем текущий узел
+	p.writeProtoField(builder, node, fieldNum)
+}
+
+// writeProtoField записывает одно поле в proto схему
+func (p *Parser) writeProtoField(builder *strings.Builder, node *TreeNode, fieldNum *int) {
+	indent := "  "
+
+	if node.Type == "message" || len(node.Children) > 0 {
+		// Это вложенное сообщение
+		messageName := fmt.Sprintf("Message%d", *fieldNum)
+		builder.WriteString(fmt.Sprintf("%s%s %s = %d;\n", indent, messageName, node.Name, node.FieldNum))
+
+		// Рекурсивно обрабатываем детей
+		*fieldNum++
+		childFieldNum := 1
+		builder.WriteString(fmt.Sprintf("%smessage %s {\n", indent, messageName))
+		for _, child := range node.Children {
+			p.writeProtoFieldRecursive(builder, child, &childFieldNum, indent+"  ")
+		}
+		builder.WriteString(fmt.Sprintf("%s}\n", indent))
+	} else {
+		// Примитивное поле
+		protoType := p.mapTypeToProtoType(node.Type)
+		if node.IsRepeated {
+			builder.WriteString(fmt.Sprintf("%srepeated %s %s = %d;\n", indent, protoType, node.Name, node.FieldNum))
+		} else {
+			builder.WriteString(fmt.Sprintf("%s%s %s = %d;\n", indent, protoType, node.Name, node.FieldNum))
+		}
+	}
+}
+
+// writeProtoFieldRecursive рекурсивно записывает поля вложенных сообщений
+func (p *Parser) writeProtoFieldRecursive(builder *strings.Builder, node *TreeNode, fieldNum *int, indent string) {
+	if node.Type == "message" || len(node.Children) > 0 {
+		// Это вложенное сообщение
+		messageName := fmt.Sprintf("Message%d", *fieldNum)
+		builder.WriteString(fmt.Sprintf("%s%s %s = %d;\n", indent, messageName, node.Name, node.FieldNum))
+
+		// Рекурсивно обрабатываем детей
+		*fieldNum++
+		childFieldNum := 1
+		builder.WriteString(fmt.Sprintf("%smessage %s {\n", indent, messageName))
+		for _, child := range node.Children {
+			p.writeProtoFieldRecursive(builder, child, &childFieldNum, indent+"  ")
+		}
+		builder.WriteString(fmt.Sprintf("%s}\n", indent))
+	} else {
+		// Примитивное поле
+		protoType := p.mapTypeToProtoType(node.Type)
+		if node.IsRepeated {
+			builder.WriteString(fmt.Sprintf("%srepeated %s %s = %d;\n", indent, protoType, node.Name, node.FieldNum))
+		} else {
+			builder.WriteString(fmt.Sprintf("%s%s %s = %d;\n", indent, protoType, node.Name, node.FieldNum))
+		}
+	}
+}
+
+// mapTypeToProtoType преобразует наш тип в proto тип
+func (p *Parser) mapTypeToProtoType(ourType string) string {
+	switch ourType {
+	case "string":
+		return "string"
+	case "number":
+		return "int32" // По умолчанию используем int32, можно улучшить
+	case "bool":
+		return "bool"
+	default:
+		return "string" // По умолчанию string
+	}
+}
+
+// treeToTextFormatWithNames преобразует дерево в текстовый формат с именами полей
+func (p *Parser) treeToTextFormatWithNames(node *TreeNode) string {
+	if node == nil {
+		return ""
+	}
+
+	var result strings.Builder
+	p.writeNodeToTextFormatWithNames(&result, node, 0)
+	return result.String()
+}
+
+// writeNodeToTextFormatWithNames рекурсивно записывает узел в текстовый формат с именами
+func (p *Parser) writeNodeToTextFormatWithNames(builder *strings.Builder, node *TreeNode, indent int) {
+	if node.Name == "root" {
+		// Пропускаем root, обрабатываем только детей
+		for _, child := range node.Children {
+			p.writeNodeToTextFormatWithNames(builder, child, indent)
+		}
+		return
+	}
+
+	// Добавляем отступ
+	for i := 0; i < indent; i++ {
+		builder.WriteString("  ")
+	}
+
+	// Если это сообщение, открываем блок
+	if node.Type == "message" || len(node.Children) > 0 {
+		builder.WriteString(fmt.Sprintf("%s {\n", node.Name))
+		// Рекурсивно обрабатываем детей
+		for _, child := range node.Children {
+			p.writeNodeToTextFormatWithNames(builder, child, indent+1)
+		}
+		// Закрываем блок
+		for i := 0; i < indent; i++ {
+			builder.WriteString("  ")
+		}
+		builder.WriteString("}\n")
+	} else {
+		// Примитивное значение - используем имя поля
+		builder.WriteString(fmt.Sprintf("%s: ", node.Name))
 		if node.Value != nil {
 			// Обрабатываем в зависимости от типа поля
 			if node.Type == "string" {

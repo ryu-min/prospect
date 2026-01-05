@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -192,4 +193,73 @@ func stringifyValue(v interface{}) string {
 		return "\"" + s + "\""
 	}
 	return ""
+}
+
+// TestParseRaw_RepeatedFields тестирует парсинг repeated полей
+func TestParseRaw_RepeatedFields(t *testing.T) {
+	// Проверяем protoc
+	protocPath := "protoc"
+	if _, err := exec.LookPath(protocPath); err != nil {
+		t.Skipf("Skipping test: protoc not found in PATH")
+		return
+	}
+
+	parser, err := NewParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	// Создаем тестовые данные с repeated полями
+	// Используем protoc для создания бинарных данных с repeated полями
+	// Сначала создаем временную proto схему
+	tempDir, err := os.MkdirTemp("", "prospect_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	protoContent := `syntax = "proto3";
+
+message TestMessage {
+  repeated string field_1 = 1;
+}
+`
+	protoFile := filepath.Join(tempDir, "test.proto")
+	if err := os.WriteFile(protoFile, []byte(protoContent), 0644); err != nil {
+		t.Fatalf("Failed to write proto file: %v", err)
+	}
+
+	// Создаем текстовый формат с repeated полями
+	textFormat := `field_1: "value1"
+field_1: "value2"
+field_1: "value3"
+`
+
+	// Кодируем в бинарный формат
+	encodeCmd := exec.Command(protocPath, "--encode", "TestMessage", "--proto_path", tempDir, protoFile)
+	encodeCmd.Stdin = strings.NewReader(textFormat)
+	binaryData, err := encodeCmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to encode test data: %v", err)
+	}
+
+	// Парсим обратно
+	tree, err := parser.ParseRaw(binaryData)
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+
+	// Проверяем, что все значения repeated поля присутствуют
+	field1Count := 0
+	for _, child := range tree.Children {
+		if child.FieldNum == 1 {
+			field1Count++
+		}
+	}
+
+	if field1Count < 3 {
+		t.Errorf("Expected at least 3 instances of field_1, got %d", field1Count)
+	}
+
+	t.Logf("Parsed repeated fields: found %d instances of field_1", field1Count)
 }
