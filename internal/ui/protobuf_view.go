@@ -97,6 +97,7 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 
 			// ШАГ 3: Отображаем дерево в виде дерева (widget.Tree)
 			adapter := NewProtobufTreeAdapter(tree)
+			adapter.SetWindow(parentWindow) // Устанавливаем окно для диалогов
 
 			// Создаем виджет дерева
 			newTreeWidget := widget.NewTree(adapter.ChildUIDs, adapter.IsBranch, adapter.CreateNode, adapter.UpdateNode)
@@ -184,6 +185,7 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 			currentTree = tree
 			// Обновляем виджет дерева
 			adapter := NewProtobufTreeAdapter(tree)
+			adapter.SetWindow(parentWindow) // Устанавливаем окно для диалогов
 			newTreeWidget := widget.NewTree(adapter.ChildUIDs, adapter.IsBranch, adapter.CreateNode, adapter.UpdateNode)
 			newTreeWidget.OpenBranch("root")
 			treeWidget = newTreeWidget
