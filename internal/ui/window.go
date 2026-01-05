@@ -2,7 +2,7 @@ package ui
 
 import (
 	"fmt"
-	"os"
+	"log"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -41,7 +41,7 @@ func AddTab(tabs *container.AppTabs, name string, content fyne.CanvasObject) {
 	newTab := container.NewTabItem(name, content)
 	tabs.Append(newTab)
 	tabs.Select(newTab)
-	fmt.Fprintf(os.Stdout, "[INFO] Добавлена вкладка: %s\n", name)
+	log.Printf("Добавлена вкладка: %s", name)
 }
 
 // CreateTab создает новую вкладку по умолчанию
@@ -60,7 +60,7 @@ func CreateTab(tabs *container.AppTabs) {
 
 	resetBtn := widget.NewButton("Сбросить", func() {
 		textArea.SetText("Новая вкладка\n\nВы можете редактировать этот текст.")
-		fmt.Println("[INFO] Текст сброшен")
+		log.Printf("Текст сброшен")
 	})
 
 	topContainer := container.NewVBox(

@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"prospect/internal/protobuf"
@@ -32,7 +31,6 @@ func (a *ProtobufTreeAdapter) ChildUIDs(uid widget.TreeNodeID) []widget.TreeNode
 
 	node := a.getNodeByUID(actualUID)
 	if node == nil {
-		fmt.Fprintf(os.Stdout, "[DEBUG] ChildUIDs: узел не найден для UID: '%s' (actualUID: '%s')\n", uid, actualUID)
 		return nil
 	}
 
@@ -47,7 +45,6 @@ func (a *ProtobufTreeAdapter) ChildUIDs(uid widget.TreeNodeID) []widget.TreeNode
 			children = append(children, childUID)
 		}
 	}
-	fmt.Fprintf(os.Stdout, "[DEBUG] ChildUIDs: UID='%s' (actualUID='%s'), children=%v\n", uid, actualUID, children)
 	return children
 }
 
@@ -63,9 +60,7 @@ func (a *ProtobufTreeAdapter) IsBranch(uid widget.TreeNodeID) bool {
 	if node == nil {
 		return false
 	}
-	isBranch := len(node.Children) > 0
-	fmt.Fprintf(os.Stdout, "[DEBUG] IsBranch: UID='%s' (actualUID='%s'), isBranch=%v\n", uid, actualUID, isBranch)
-	return isBranch
+	return len(node.Children) > 0
 }
 
 // CreateNode создает виджет для узла
@@ -86,7 +81,6 @@ func (a *ProtobufTreeAdapter) UpdateNode(uid widget.TreeNodeID, branch bool, obj
 
 	node := a.getNodeByUID(actualUID)
 	if node == nil {
-		fmt.Fprintf(os.Stdout, "[DEBUG] UpdateNode: узел не найден для UID: '%s' (actualUID: '%s')\n", uid, actualUID)
 		if label, ok := obj.(*widget.Label); ok {
 			label.SetText(fmt.Sprintf("ERROR: Node not found ('%s')", uid))
 		}
@@ -116,20 +110,17 @@ func (a *ProtobufTreeAdapter) UpdateNode(uid widget.TreeNodeID, branch bool, obj
 	}
 
 	label.SetText(text)
-	fmt.Fprintf(os.Stdout, "[DEBUG] UpdateNode: UID='%s' (actualUID='%s'), text=%s\n", uid, actualUID, text)
 }
 
 // getNodeByUID получает узел по UID
 func (a *ProtobufTreeAdapter) getNodeByUID(uid widget.TreeNodeID) *protobuf.TreeNode {
 	if a.tree == nil {
-		fmt.Fprintf(os.Stdout, "[DEBUG] getNodeByUID: tree is nil\n")
 		return nil
 	}
 
 	// В Fyne widget.Tree использует пустую строку "" для root
 	// Также может быть "root" или числовой формат для дочерних узлов
 	if uid == "" || uid == "root" {
-		fmt.Fprintf(os.Stdout, "[DEBUG] getNodeByUID: возвращаем root, children=%d\n", len(a.tree.Children))
 		return a.tree
 	}
 
@@ -139,57 +130,34 @@ func (a *ProtobufTreeAdapter) getNodeByUID(uid widget.TreeNodeID) *protobuf.Tree
 		// Формат "root:0:1"
 		parts = splitUID(uid)
 		if len(parts) == 0 || parts[0] != "root" {
-			fmt.Fprintf(os.Stdout, "[DEBUG] getNodeByUID: неверный формат UID (root:...)\n")
 			return nil
 		}
 	} else {
 		// Числовой формат "0", "0:1" - начинаем с root
 		parts = splitUID(uid)
 		if len(parts) == 0 {
-			fmt.Fprintf(os.Stdout, "[DEBUG] getNodeByUID: пустой UID после парсинга\n")
 			return nil
 		}
 		// Добавляем "root" в начало
 		parts = append([]string{"root"}, parts...)
 	}
 
-	fmt.Fprintf(os.Stdout, "[DEBUG] getNodeByUID: UID='%s', parts=%v\n", uid, parts)
-
 	// Навигация по дереву (начинаем с индекса 1, так как parts[0] = "root")
 	current := a.tree
 	for i := 1; i < len(parts); i++ {
 		idx := parseInt(parts[i])
-		fmt.Fprintf(os.Stdout, "[DEBUG] getNodeByUID: часть %d, idx=%d, len(children)=%d\n", i, idx, len(current.Children))
 		if idx < 0 || idx >= len(current.Children) {
-			fmt.Fprintf(os.Stdout, "[DEBUG] getNodeByUID: индекс вне диапазона\n")
 			return nil
 		}
 		current = current.Children[idx]
 	}
 
-	fmt.Fprintf(os.Stdout, "[DEBUG] getNodeByUID: найден узел %s\n", current.Name)
 	return current
 }
 
-// DebugPrintTree выводит дерево для отладки
+// DebugPrintTree выводит дерево для отладки (вывод отключен)
 func (a *ProtobufTreeAdapter) DebugPrintTree() {
-	fmt.Fprintf(os.Stdout, "[DEBUG] Tree structure:\n")
-	a.printNode(a.tree, 0)
-}
-
-func (a *ProtobufTreeAdapter) printNode(node *protobuf.TreeNode, indent int) {
-	if node == nil {
-		return
-	}
-	prefix := strings.Repeat("  ", indent)
-	fmt.Fprintf(os.Stdout, "%s%s (field_%d, %s)", prefix, node.Name, node.FieldNum, node.Type)
-	if node.Value != nil {
-		fmt.Fprintf(os.Stdout, " = %v", node.Value)
-	}
-	fmt.Fprintf(os.Stdout, " [children: %d]\n", len(node.Children))
-	for _, child := range node.Children {
-		a.printNode(child, indent+1)
-	}
+	// Метод оставлен для совместимости, но вывод отключен
 }
 
 // splitUID разбивает UID на части

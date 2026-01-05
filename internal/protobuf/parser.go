@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -64,7 +65,7 @@ func CheckProtoc() error {
 		return fmt.Errorf("protoc не работает: %w", err)
 	}
 
-	fmt.Fprintf(os.Stdout, "[INFO] protoc найден: %s\n", strings.TrimSpace(string(output)))
+	log.Printf("protoc найден: %s", strings.TrimSpace(string(output)))
 	return nil
 }
 
@@ -81,7 +82,6 @@ func (p *Parser) ParseRaw(data []byte) (*TreeNode, error) {
 
 	// Парсим вывод protoc в дерево
 	outputStr := string(output)
-	fmt.Fprintf(os.Stdout, "[DEBUG] Вывод protoc:\n%s\n", outputStr)
 	return p.parseProtocOutput(outputStr)
 }
 
@@ -142,14 +142,12 @@ func (p *Parser) parseProtocOutput(output string) (*TreeNode, error) {
 				Children:   make([]*TreeNode, 0),
 				IsRepeated: false,
 			}
-			
+
 			if len(stack) > 0 {
 				stack[len(stack)-1].AddChild(node)
 			}
 			stack = append(stack, node)
 			stackIndents = append(stackIndents, indent)
-			fmt.Fprintf(os.Stdout, "[DEBUG] Открыто сообщение: %s (indent=%d, stackSize=%d)\n",
-				node.Name, indent, len(stack))
 			continue
 		}
 
@@ -160,8 +158,6 @@ func (p *Parser) parseProtocOutput(output string) (*TreeNode, error) {
 			if len(stack) > 0 {
 				parent := stack[len(stack)-1]
 				parent.AddChild(node)
-				fmt.Fprintf(os.Stdout, "[DEBUG] Добавлен узел: %s (field_%d, %s) в %s (indent=%d, parentIndent=%d, stackSize=%d)\n",
-					node.Name, node.FieldNum, node.Type, parent.Name, indent, stackIndents[len(stackIndents)-1], len(stack))
 			}
 		}
 	}

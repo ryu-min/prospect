@@ -2,7 +2,7 @@ package ui
 
 import (
 	"fmt"
-	"os"
+	"log"
 	"strings"
 
 	"prospect/internal/protobuf"
@@ -43,21 +43,17 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 
 	// Кнопка открытия файла
 	openBtn = widget.NewButton("Открыть бинарный protobuf файл", func() {
-		fmt.Fprintf(os.Stdout, "[DEBUG] Кнопка открытия файла нажата\n")
 		// Создаем диалог с сохранением позиции
 		fileDialog := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
-			fmt.Fprintf(os.Stdout, "[DEBUG] Callback диалога вызван, err=%v, reader=%v\n", err, reader != nil)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "[ERROR] Ошибка диалога: %v\n", err)
+				log.Printf("Ошибка диалога: %v", err)
 				dialog.ShowError(err, parentWindow)
 				return
 			}
 			if reader == nil {
-				fmt.Fprintf(os.Stdout, "[DEBUG] Reader is nil, пользователь отменил выбор\n")
 				return
 			}
 			defer reader.Close()
-			fmt.Fprintf(os.Stdout, "[DEBUG] Файл выбран: %s\n", reader.URI().Path())
 
 			// Сохраняем последнюю директорию
 			dialogState.SetLastOpenDir(reader.URI())
@@ -76,7 +72,7 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 			}
 
 			// Парсим protobuf
-			fmt.Fprintf(os.Stdout, "[INFO] Парсинг protobuf файла: %s\n", reader.URI().Path())
+			log.Printf("Парсинг protobuf файла: %s", reader.URI().Path())
 
 			// ВРЕМЕННО: Используем фейковое дерево для тестирования виджета
 			// tree, err := parser.ParseRaw(data)
@@ -85,14 +81,11 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 			// 	return
 			// }
 			tree := protobuf.CreateFakeTree()
-			fmt.Fprintf(os.Stdout, "[DEBUG] Используется ФЕЙКОВОЕ дерево для тестирования виджета\n")
 
 			currentTree = tree
-			fmt.Fprintf(os.Stdout, "[DEBUG] Дерево распарсено, узлов в root: %d\n", len(tree.Children))
 
 			// ШАГ 3: Отображаем дерево в виде дерева (widget.Tree)
 			adapter := NewProtobufTreeAdapter(tree)
-			adapter.DebugPrintTree() // Отладочный вывод структуры дерева
 
 			// Создаем виджет дерева
 			newTreeWidget := widget.NewTree(adapter.ChildUIDs, adapter.IsBranch, adapter.CreateNode, adapter.UpdateNode)
@@ -100,17 +93,14 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 			// Проверяем, что root имеет детей и открываем его
 			// В Fyne widget.Tree использует пустую строку "" для root
 			rootChildren := adapter.ChildUIDs("")
-			fmt.Fprintf(os.Stdout, "[DEBUG] Root children UIDs: %v\n", rootChildren)
 
 			// ВАЖНО: Открываем root ДО добавления в контейнер (используем пустую строку)
 			if len(rootChildren) > 0 {
-				fmt.Fprintf(os.Stdout, "[DEBUG] Открываем ветку root (пустая строка)\n")
 				newTreeWidget.OpenBranch("")
 			}
 
 			// Обновляем виджет дерева
 			newTreeWidget.Refresh()
-			fmt.Fprintf(os.Stdout, "[DEBUG] Виджет дерева создан и обновлен\n")
 
 			treeWidget = newTreeWidget
 
@@ -120,7 +110,6 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 			treeScrollContainer = newScrollContainer
 
 			// ВАЖНО: Принудительно запрашиваем данные для root
-			fmt.Fprintf(os.Stdout, "[DEBUG] Принудительно запрашиваем данные для root\n")
 			_ = adapter.ChildUIDs("root")
 			_ = adapter.IsBranch("root")
 
@@ -134,12 +123,11 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 			)
 			// Обновляем контент вкладки через BrowserTabs
 			if browserTabs != nil {
-				fmt.Fprintf(os.Stdout, "[DEBUG] Вызов UpdateTabContent\n")
 				browserTabs.UpdateTabContent(container.NewPadded(newBorder))
 			} else {
-				fmt.Fprintf(os.Stderr, "[ERROR] browserTabs is nil!\n")
+				log.Printf("Ошибка: browserTabs is nil")
 			}
-			fmt.Fprintf(os.Stdout, "[INFO] Protobuf файл успешно распарсен, дерево обновлено\n")
+			log.Printf("Protobuf файл успешно распарсен, дерево обновлено")
 		}, parentWindow)
 
 		// Устанавливаем начальную директорию
@@ -173,7 +161,7 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 			dialogState.SetLastSchemaDir(reader.URI())
 
 			schemaPath := reader.URI().Path()
-			fmt.Fprintf(os.Stdout, "[INFO] Применение схемы: %s\n", schemaPath)
+			log.Printf("Применение схемы: %s", schemaPath)
 
 			// TODO: Реализовать применение схемы
 			tree, err := parser.ApplySchema(currentTree, schemaPath)
@@ -203,7 +191,7 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 			if browserTabs != nil {
 				browserTabs.UpdateTabContent(container.NewPadded(newBorder))
 			}
-			fmt.Fprintf(os.Stdout, "[INFO] Схема успешно применена, дерево обновлено\n")
+			log.Printf("Схема успешно применена, дерево обновлено")
 		}, parentWindow)
 
 		// Устанавливаем начальную директорию

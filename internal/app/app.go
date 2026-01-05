@@ -2,7 +2,7 @@ package app
 
 import (
 	"fmt"
-	"os"
+	"log"
 
 	"prospect/internal/protobuf"
 	"prospect/internal/ui"
@@ -20,7 +20,7 @@ type App struct {
 // New создает новое приложение
 func New() *App {
 	fyneApp := app.New()
-	fmt.Fprintln(os.Stdout, "[INFO] Приложение Fyne создано успешно")
+	log.Printf("Приложение Fyne создано успешно")
 
 	return &App{
 		fyneApp: fyneApp,
@@ -30,20 +30,20 @@ func New() *App {
 // Run запускает приложение
 func (a *App) Run() error {
 	// Проверяем наличие protoc
-	fmt.Fprintln(os.Stdout, "[INFO] Проверка наличия protoc...")
+	log.Printf("Проверка наличия protoc...")
 	if err := protobuf.CheckProtoc(); err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
-		fmt.Fprintln(os.Stderr, "[ERROR] Установите protoc для работы с protobuf файлами")
-		fmt.Fprintln(os.Stderr, "[ERROR] Можно установить через: scoop install protobuf")
+		log.Printf("Ошибка: %v", err)
+		log.Printf("Установите protoc для работы с protobuf файлами")
+		log.Printf("Можно установить через: scoop install protobuf")
 		return fmt.Errorf("protoc не найден: %w", err)
 	}
 
 	// Создаем главное окно
 	a.window = ui.NewMainWindow(a.fyneApp)
-	fmt.Fprintln(os.Stdout, "[INFO] Главное окно создано")
+	log.Printf("Главное окно создано")
 
 	// Показываем окно и запускаем главный цикл
-	fmt.Fprintln(os.Stdout, "[INFO] Запуск главного цикла приложения...")
+	log.Printf("Запуск главного цикла приложения...")
 	a.window.ShowAndRun()
 
 	return nil

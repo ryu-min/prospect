@@ -2,7 +2,7 @@ package ui
 
 import (
 	"fmt"
-	"os"
+	"log"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -47,13 +47,13 @@ func (bt *BrowserTabs) AddTab(title string, content fyne.CanvasObject) {
 	bt.tabs = append(bt.tabs, tab)
 	bt.selectedTab = len(bt.tabs) - 1
 	bt.Refresh()
-	fmt.Fprintf(os.Stdout, "[INFO] Добавлена вкладка: %s\n", title)
+	log.Printf("Добавлена вкладка: %s", title)
 }
 
 // RemoveTab удаляет вкладку по индексу
 func (bt *BrowserTabs) RemoveTab(index int) {
 	if index < 0 || index >= len(bt.tabs) {
-		fmt.Fprintf(os.Stderr, "[ERROR] Попытка удалить несуществующую вкладку: индекс %d, всего вкладок: %d\n", index, len(bt.tabs))
+		log.Printf("Ошибка: попытка удалить несуществующую вкладку: индекс %d, всего вкладок: %d", index, len(bt.tabs))
 		return
 	}
 
@@ -82,7 +82,7 @@ func (bt *BrowserTabs) RemoveTab(index int) {
 		// Если bt.selectedTab < index, ничего не меняем
 	}
 
-	fmt.Fprintf(os.Stdout, "[INFO] Вкладка '%s' удалена, осталось вкладок: %d, выбранная: %d\n", title, len(bt.tabs), bt.selectedTab)
+	log.Printf("Вкладка '%s' удалена, осталось вкладок: %d", title, len(bt.tabs))
 	bt.Refresh()
 }
 
@@ -102,12 +102,10 @@ func (bt *BrowserTabs) SetAddButtonCallback(callback func()) {
 // UpdateTabContent обновляет контент выбранной вкладки
 func (bt *BrowserTabs) UpdateTabContent(content fyne.CanvasObject) {
 	if bt.selectedTab >= 0 && bt.selectedTab < len(bt.tabs) {
-		fmt.Fprintf(os.Stdout, "[DEBUG] Обновление контента вкладки %d\n", bt.selectedTab)
 		bt.tabs[bt.selectedTab].content = content
 		bt.Refresh()
-		fmt.Fprintf(os.Stdout, "[DEBUG] Контент вкладки обновлен\n")
 	} else {
-		fmt.Fprintf(os.Stderr, "[ERROR] Не удалось обновить контент: selectedTab=%d, len(tabs)=%d\n", bt.selectedTab, len(bt.tabs))
+		log.Printf("Ошибка: не удалось обновить контент: selectedTab=%d, len(tabs)=%d", bt.selectedTab, len(bt.tabs))
 	}
 }
 
@@ -207,8 +205,6 @@ func (r *browserTabsRenderer) Refresh() {
 		r.contentArea, // центр - содержимое выбранной вкладки
 	)
 
-	fmt.Fprintf(os.Stdout, "[DEBUG] Renderer Refresh: selectedTab=%d, contentArea=%v, mainContent=%v\n",
-		r.tabs.selectedTab, r.contentArea != nil, r.mainContent != nil)
 }
 
 func (r *browserTabsRenderer) Objects() []fyne.CanvasObject {
