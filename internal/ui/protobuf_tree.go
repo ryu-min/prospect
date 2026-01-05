@@ -229,31 +229,42 @@ func (a *ProtobufTreeAdapter) UpdateNode(uid widget.TreeNodeID, branch bool, obj
 		typeText := node.Type
 		editWidget.typeLabel.SetText(typeText)
 
-		// Устанавливаем значение в Entry (третья колонка)
-		valueStr := ""
-		if node.Value != nil {
-			switch v := node.Value.(type) {
-			case string:
-				valueStr = v
-			case bool:
-				if v {
-					valueStr = "true"
-				} else {
-					valueStr = "false"
-				}
-			default:
-				valueStr = fmt.Sprintf("%v", v)
-			}
-		}
+		// Получаем текущее значение из узла (источник истины)
+		// ВАЖНО: Всегда читаем из узла, а не из виджета
+		valueStr := a.nodeValueToString(node)
+
+		// Временно отключаем OnChanged, чтобы не триггерить обновление при SetText
+		editWidget.entry.OnChanged = nil
 		editWidget.entry.SetText(valueStr)
 
-		// Обновляем обработчик с правильным типом
+		// Устанавливаем обработчик с правильным типом после установки значения
 		fieldType := node.Type
 		editWidget.entry.OnChanged = func(value string) {
+			// Всегда обновляем значение в узле при изменении
+			// Узел - это источник истины, виджет только отображает его
 			a.updateNodeValue(actualUID, value, fieldType)
 		}
 		editWidget.Refresh()
 		return
+	}
+}
+
+// nodeValueToString преобразует значение узла в строку для отображения
+func (a *ProtobufTreeAdapter) nodeValueToString(node *protobuf.TreeNode) string {
+	if node.Value == nil {
+		return ""
+	}
+
+	switch v := node.Value.(type) {
+	case string:
+		return v
+	case bool:
+		if v {
+			return "true"
+		}
+		return "false"
+	default:
+		return fmt.Sprintf("%v", v)
 	}
 }
 
@@ -269,6 +280,7 @@ func (a *ProtobufTreeAdapter) updateNodeValue(uid widget.TreeNodeID, valueStr st
 	case "string":
 		node.Value = valueStr
 	case "number":
+		// Для чисел сохраняем как строку (как при парсинге)
 		node.Value = valueStr
 	case "bool":
 		if valueStr == "true" || valueStr == "1" {
@@ -276,6 +288,7 @@ func (a *ProtobufTreeAdapter) updateNodeValue(uid widget.TreeNodeID, valueStr st
 		} else if valueStr == "false" || valueStr == "0" {
 			node.Value = false
 		} else {
+			// Если не распознано, сохраняем как строку
 			node.Value = valueStr
 		}
 	default:
