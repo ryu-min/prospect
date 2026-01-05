@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"prospect/internal/protobuf"
@@ -237,11 +238,29 @@ func (a *ProtobufTreeAdapter) UpdateNode(uid widget.TreeNodeID, branch bool, obj
 		editWidget.entry.OnChanged = nil
 		editWidget.entry.SetText(valueStr)
 
+		// Сохраняем последнее валидное значение для отката
+		lastValidValue := valueStr
+		var isUpdating bool // Флаг для предотвращения рекурсии
+
 		// Устанавливаем обработчик с правильным типом после установки значения
 		fieldType := node.Type
 		editWidget.entry.OnChanged = func(value string) {
-			// Всегда обновляем значение в узле при изменении
-			// Узел - это источник истины, виджет только отображает его
+			// Предотвращаем рекурсию при откате
+			if isUpdating {
+				return
+			}
+
+			// Валидируем значение в зависимости от типа
+			if !a.validateValue(value, fieldType) {
+				// Если значение невалидно, откатываем к последнему валидному
+				isUpdating = true
+				editWidget.entry.SetText(lastValidValue)
+				isUpdating = false
+				return
+			}
+
+			// Значение валидно, обновляем
+			lastValidValue = value
 			a.updateNodeValue(actualUID, value, fieldType)
 		}
 		editWidget.Refresh()
@@ -265,6 +284,69 @@ func (a *ProtobufTreeAdapter) nodeValueToString(node *protobuf.TreeNode) string 
 		return "false"
 	default:
 		return fmt.Sprintf("%v", v)
+	}
+}
+
+// validateValue проверяет, является ли значение валидным для данного типа
+// Разрешает промежуточные состояния ввода (например, "-" для отрицательных чисел)
+func (a *ProtobufTreeAdapter) validateValue(value string, fieldType string) bool {
+	if value == "" {
+		// Пустое значение допустимо для всех типов
+		return true
+	}
+
+	switch fieldType {
+	case "string":
+		// Для строки любое значение валидно
+		return true
+	case "number":
+		// Для числа разрешаем промежуточные состояния ввода
+		// "-" - начало отрицательного числа
+		if value == "-" {
+			return true
+		}
+		// "." - начало десятичного числа
+		if value == "." {
+			return true
+		}
+		// "-." - начало отрицательного десятичного числа
+		if value == "-." {
+			return true
+		}
+		// Проверяем, что это валидное число или промежуточное состояние
+		// Разрешаем паттерны типа "123.", "-123.", ".5", "-.5"
+		trimmed := strings.TrimSpace(value)
+		if strings.HasSuffix(trimmed, ".") {
+			// Убираем точку в конце для проверки
+			trimmed = strings.TrimSuffix(trimmed, ".")
+		}
+		// Пробуем распарсить как int
+		_, err := strconv.ParseInt(trimmed, 10, 64)
+		if err != nil {
+			// Пробуем как float
+			_, err = strconv.ParseFloat(trimmed, 64)
+			if err != nil {
+				// Если не получилось, проверяем промежуточные состояния
+				// Разрешаем паттерны типа "-", "123.", "-123."
+				if trimmed == "-" || strings.HasSuffix(value, ".") {
+					return true
+				}
+				return false
+			}
+		}
+		return true
+	case "bool":
+		// Для bool только true, false, 0, 1
+		// Но разрешаем промежуточные состояния ввода
+		valueLower := strings.ToLower(strings.TrimSpace(value))
+		// Разрешаем начало ввода "t", "tr", "tru", "f", "fa", "fal", "fals"
+		if strings.HasPrefix("true", valueLower) || strings.HasPrefix("false", valueLower) {
+			return true
+		}
+		return valueLower == "true" || valueLower == "false" || valueLower == "0" || valueLower == "1"
+	default:
+		// Для неизвестных типов разрешаем любое значение
+		return true
 	}
 }
 
