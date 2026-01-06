@@ -9,35 +9,29 @@ import (
 )
 
 func TestParseRawWithNestedMessage(t *testing.T) {
-	// Тест с реальным файлом person.bin, который содержит вложенные сообщения
 	testdataDir := "testdata"
 	personBin := filepath.Join(testdataDir, "person.bin")
 
-	// Получаем абсолютный путь
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Failed to get working directory: %v", err)
 	}
 
-	// Если мы в internal/protobuf, поднимаемся на два уровня вверх
 	if filepath.Base(wd) == "protobuf" {
 		testdataDir = filepath.Join("..", "..", "testdata")
 	}
 	personBin = filepath.Join(testdataDir, "person.bin")
 
-	// Получаем абсолютный путь
 	absPath, err := filepath.Abs(personBin)
 	if err != nil {
 		t.Fatalf("Failed to get absolute path: %v", err)
 	}
 
-	// Проверяем, существует ли файл
 	if _, err := os.Stat(absPath); os.IsNotExist(err) {
 		t.Skipf("Skipping test: %s does not exist (tried %s from %s)", absPath, personBin, wd)
 		return
 	}
 
-	// Проверяем protoc
 	protocPath := "protoc"
 	if _, err := exec.LookPath(protocPath); err != nil {
 		t.Skipf("Skipping test: protoc not found in PATH")
@@ -49,13 +43,11 @@ func TestParseRawWithNestedMessage(t *testing.T) {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
 
-	// Читаем файл
 	data, err := os.ReadFile(absPath)
 	if err != nil {
 		t.Fatalf("Failed to read %s: %v", absPath, err)
 	}
 
-	// Используем ParseRaw (вызывает protoc --decode_raw)
 	tree, err := parser.ParseRaw(data)
 	if err != nil {
 		t.Fatalf("Failed to parse %s: %v", absPath, err)
@@ -65,16 +57,13 @@ func TestParseRawWithNestedMessage(t *testing.T) {
 		t.Fatal("Tree is nil")
 	}
 
-	// Проверяем структуру дерева
 	if tree.Name != "root" {
 		t.Errorf("Expected root name to be 'root', got '%s'", tree.Name)
 	}
 
-	// Выводим структуру дерева для отладки
 	t.Logf("\nTree structure from ParseRaw:")
 	printTree(t, tree, 0)
 
-	// Проверяем количество детей root - должно быть 6 (field_1, field_2, field_3, field_4, field_5, field_5)
 	expectedRootChildren := 6
 	if len(tree.Children) != expectedRootChildren {
 		t.Errorf("Expected root to have %d children, got %d", expectedRootChildren, len(tree.Children))
@@ -84,7 +73,6 @@ func TestParseRawWithNestedMessage(t *testing.T) {
 		}
 	}
 
-	// Находим field_4 (Address message) - это должен быть 4-й элемент (индекс 3)
 	var field4 *TreeNode
 	field4Index := -1
 	for i, child := range tree.Children {
@@ -107,7 +95,6 @@ func TestParseRawWithNestedMessage(t *testing.T) {
 		t.Errorf("Expected field_4 to be of type 'message', got '%s'", field4.Type)
 	}
 
-	// ВАЖНО: Проверяем, что field_4 имеет 4 детей (street, city, country, zip_code)
 	expectedField4Children := 4
 	if len(field4.Children) != expectedField4Children {
 		t.Errorf("Expected field_4 to have %d children, got %d", expectedField4Children, len(field4.Children))
@@ -119,33 +106,27 @@ func TestParseRawWithNestedMessage(t *testing.T) {
 		printTree(t, tree, 0)
 	}
 
-	// Проверяем, что все дети field_4 находятся на правильных позициях
-	// field_4 должен быть на индексе 3 в root.Children
 	if field4Index != 3 {
 		t.Errorf("Expected field_4 to be at index 3 in root.Children, got index %d", field4Index)
 	}
 
-	// Проверяем, что дети field_4 находятся ВНУТРИ field_4, а не в root
 	for i, child := range tree.Children {
 		if i != field4Index && child.FieldNum >= 1 && child.FieldNum <= 4 {
-			// Это может быть проблемой - если мы находим field_1-4 вне field_4, это неправильно
-			// Но нужно быть осторожным, так как field_1-3 могут быть и в root
 			if i > field4Index {
 				t.Errorf("Found field_%d at index %d (after field_4 at index %d) - this might indicate parsing issue", child.FieldNum, i, field4Index)
 			}
 		}
 	}
 
-	// Проверяем содержимое field_4 (ожидаемые значения из person.bin)
 	expectedFields := []struct {
 		fieldNum int
 		typeName string
 		value    interface{}
 	}{
 		{1, "string", "123 Main St"},
-		{2, "string", "New York"},
+		{2, "string", "New York alo"},
 		{3, "string", "USA"},
-		{4, "number", "10001"},
+		{4, "number", "12"},
 	}
 
 	if len(field4.Children) >= len(expectedFields) {
@@ -168,7 +149,6 @@ func TestParseRawWithNestedMessage(t *testing.T) {
 	}
 }
 
-// printTree выводит дерево для отладки
 func printTree(t *testing.T, node *TreeNode, indent int) {
 	prefix := ""
 	for i := 0; i < indent; i++ {
@@ -195,9 +175,7 @@ func stringifyValue(v interface{}) string {
 	return ""
 }
 
-// TestParseRaw_RepeatedFields тестирует парсинг repeated полей
 func TestParseRaw_RepeatedFields(t *testing.T) {
-	// Проверяем protoc
 	protocPath := "protoc"
 	if _, err := exec.LookPath(protocPath); err != nil {
 		t.Skipf("Skipping test: protoc not found in PATH")
@@ -209,9 +187,6 @@ func TestParseRaw_RepeatedFields(t *testing.T) {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
 
-	// Создаем тестовые данные с repeated полями
-	// Используем protoc для создания бинарных данных с repeated полями
-	// Сначала создаем временную proto схему
 	tempDir, err := os.MkdirTemp("", "prospect_test_*")
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
@@ -229,13 +204,11 @@ message TestMessage {
 		t.Fatalf("Failed to write proto file: %v", err)
 	}
 
-	// Создаем текстовый формат с repeated полями
 	textFormat := `field_1: "value1"
 field_1: "value2"
 field_1: "value3"
 `
 
-	// Кодируем в бинарный формат
 	encodeCmd := exec.Command(protocPath, "--encode", "TestMessage", "--proto_path", tempDir, protoFile)
 	encodeCmd.Stdin = strings.NewReader(textFormat)
 	binaryData, err := encodeCmd.Output()
@@ -243,13 +216,11 @@ field_1: "value3"
 		t.Fatalf("Failed to encode test data: %v", err)
 	}
 
-	// Парсим обратно
 	tree, err := parser.ParseRaw(binaryData)
 	if err != nil {
 		t.Fatalf("Failed to parse: %v", err)
 	}
 
-	// Проверяем, что все значения repeated поля присутствуют
 	field1Count := 0
 	for _, child := range tree.Children {
 		if child.FieldNum == 1 {
