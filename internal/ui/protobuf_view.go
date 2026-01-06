@@ -225,7 +225,8 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 		}
 
 		// Сериализуем дерево в бинарный формат
-		binaryData, err := parser.SerializeRaw(currentTree)
+		serializer := protobuf.NewSerializer(parser.GetProtocPath())
+		binaryData, err := serializer.SerializeRaw(currentTree)
 		if err != nil {
 			dialog.ShowError(fmt.Errorf("serialization error: %w", err), parentWindow)
 			return

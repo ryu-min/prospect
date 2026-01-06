@@ -13,6 +13,8 @@ func TestGenerateProtoSchema_SimpleFields(t *testing.T) {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
 
+	serializer := NewSerializer(parser.GetProtocPath())
+
 	// Создаем простое дерево с примитивными полями
 	root := &TreeNode{
 		Name:     "root",
@@ -49,7 +51,7 @@ func TestGenerateProtoSchema_SimpleFields(t *testing.T) {
 	root.AddChild(field3)
 
 	// Генерируем схему
-	schema := parser.generateProtoSchema(root)
+	schema := serializer.GenerateProtoSchema(root)
 
 	// Проверяем базовую структуру
 	if !strings.Contains(schema, "syntax = \"proto3\";") {
@@ -82,6 +84,8 @@ func TestGenerateProtoSchema_NestedMessage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
+
+	serializer := NewSerializer(parser.GetProtocPath())
 
 	// Создаем дерево с вложенным сообщением
 	root := &TreeNode{
@@ -129,7 +133,7 @@ func TestGenerateProtoSchema_NestedMessage(t *testing.T) {
 	root.AddChild(nestedMessage)
 
 	// Генерируем схему
-	schema := parser.generateProtoSchema(root)
+	schema := serializer.GenerateProtoSchema(root)
 
 	// Проверяем наличие вложенного сообщения
 	if !strings.Contains(schema, "Message1 field_2 = 2;") {
@@ -158,6 +162,8 @@ func TestGenerateProtoSchema_RepeatedFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
+
+	serializer := NewSerializer(parser.GetProtocPath())
 
 	// Создаем дерево с repeated полем
 	root := &TreeNode{
@@ -189,7 +195,7 @@ func TestGenerateProtoSchema_RepeatedFields(t *testing.T) {
 	root.AddChild(field1_2)
 
 	// Генерируем схему
-	schema := parser.generateProtoSchema(root)
+	schema := serializer.GenerateProtoSchema(root)
 
 	// Проверяем, что поле помечено как repeated
 	if !strings.Contains(schema, "repeated string field_1 = 1;") {
@@ -206,6 +212,8 @@ func TestMapTypeToProtoType(t *testing.T) {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
 
+	serializer := NewSerializer(parser.GetProtocPath())
+
 	tests := []struct {
 		input    string
 		expected string
@@ -217,7 +225,7 @@ func TestMapTypeToProtoType(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		result := parser.mapTypeToProtoType(tt.input)
+		result := serializer.MapTypeToProtoType(tt.input)
 		if result != tt.expected {
 			t.Errorf("mapTypeToProtoType(%q) = %q, expected %q", tt.input, result, tt.expected)
 		}
@@ -230,6 +238,8 @@ func TestTreeToTextFormatWithNames_SimpleFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
+
+	serializer := NewSerializer(parser.GetProtocPath())
 
 	// Создаем простое дерево
 	root := &TreeNode{
@@ -267,7 +277,7 @@ func TestTreeToTextFormatWithNames_SimpleFields(t *testing.T) {
 	root.AddChild(field3)
 
 	// Генерируем текстовый формат
-	textFormat := parser.treeToTextFormatWithNames(root)
+	textFormat := serializer.TreeToTextFormatWithNames(root)
 
 	// Проверяем наличие полей с именами
 	if !strings.Contains(textFormat, "field_1: \"Hello, World!\"") {
@@ -291,6 +301,8 @@ func TestTreeToTextFormatWithNames_NestedMessage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
+
+	serializer := NewSerializer(parser.GetProtocPath())
 
 	// Создаем дерево с вложенным сообщением
 	root := &TreeNode{
@@ -329,7 +341,7 @@ func TestTreeToTextFormatWithNames_NestedMessage(t *testing.T) {
 	root.AddChild(nestedMessage)
 
 	// Генерируем текстовый формат
-	textFormat := parser.treeToTextFormatWithNames(root)
+	textFormat := serializer.TreeToTextFormatWithNames(root)
 
 	// Проверяем наличие вложенного сообщения
 	if !strings.Contains(textFormat, "field_2 {") {
@@ -349,6 +361,8 @@ func TestTreeToTextFormatWithNames_RepeatedFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
+
+	serializer := NewSerializer(parser.GetProtocPath())
 
 	// Создаем дерево с repeated полем
 	root := &TreeNode{
@@ -390,7 +404,7 @@ func TestTreeToTextFormatWithNames_RepeatedFields(t *testing.T) {
 	root.AddChild(field1_3)
 
 	// Генерируем текстовый формат
-	textFormat := parser.treeToTextFormatWithNames(root)
+	textFormat := serializer.TreeToTextFormatWithNames(root)
 
 	// Проверяем, что все значения repeated поля присутствуют
 	if !strings.Contains(textFormat, "field_1: \"value1\"") {
@@ -421,6 +435,8 @@ func TestSerializeRaw_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
+
+	serializer := NewSerializer(parser.GetProtocPath())
 
 	// Создаем тестовое дерево
 	root := &TreeNode{
@@ -458,7 +474,7 @@ func TestSerializeRaw_RoundTrip(t *testing.T) {
 	root.AddChild(field3)
 
 	// Сериализуем дерево
-	binaryData, err := parser.SerializeRaw(root)
+	binaryData, err := serializer.SerializeRaw(root)
 	if err != nil {
 		t.Fatalf("Failed to serialize tree: %v", err)
 	}
@@ -525,6 +541,8 @@ func TestSerializeRaw_WithNestedMessage(t *testing.T) {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
 
+	serializer := NewSerializer(parser.GetProtocPath())
+
 	// Создаем дерево с вложенным сообщением
 	root := &TreeNode{
 		Name:     "root",
@@ -571,7 +589,7 @@ func TestSerializeRaw_WithNestedMessage(t *testing.T) {
 	root.AddChild(nestedMessage)
 
 	// Сериализуем дерево
-	binaryData, err := parser.SerializeRaw(root)
+	binaryData, err := serializer.SerializeRaw(root)
 	if err != nil {
 		t.Fatalf("Failed to serialize tree: %v", err)
 	}
@@ -629,6 +647,8 @@ func TestSerializeRaw_WithRepeatedFields(t *testing.T) {
 		t.Fatalf("Failed to create parser: %v", err)
 	}
 
+	serializer := NewSerializer(parser.GetProtocPath())
+
 	// Создаем дерево с repeated полем
 	root := &TreeNode{
 		Name:     "root",
@@ -659,7 +679,7 @@ func TestSerializeRaw_WithRepeatedFields(t *testing.T) {
 	root.AddChild(field1_2)
 
 	// Сериализуем дерево
-	binaryData, err := parser.SerializeRaw(root)
+	binaryData, err := serializer.SerializeRaw(root)
 	if err != nil {
 		t.Fatalf("Failed to serialize tree: %v", err)
 	}
@@ -693,4 +713,3 @@ func TestSerializeRaw_WithRepeatedFields(t *testing.T) {
 
 	t.Logf("Round trip with repeated fields successful: serialized %d bytes, found %d instances of field_1", len(binaryData), field1Count)
 }
-
