@@ -24,14 +24,11 @@ func NewMainWindow(fyneApp fyne.App) fyne.Window {
 		window.SetIcon(icon)
 	}
 
-	// Создаем кастомный виджет табов с кнопками закрытия
-	browserTabs := NewBrowserTabs()
+	browserTabs := newTabManager()
 	browserTabs.SetAddButtonCallback(func() {
 		CreateTabWithClose(browserTabs)
 	})
 
-	// Создаем первую вкладку по умолчанию - Protobuf Viewer
-	// Передаем окно для диалогов
 	CreateProtobufTab(browserTabs, fyneApp, window)
 
 	window.SetContent(browserTabs)
@@ -90,8 +87,7 @@ func CreateTab(tabs *container.AppTabs) {
 	AddTab(tabs, tabName, content)
 }
 
-// CreateTabWithClose создает новую вкладку с кнопкой закрытия через BrowserTabs
-func CreateTabWithClose(browserTabs *BrowserTabs) {
+func CreateTabWithClose(browserTabs *tabManager) {
 	// Получаем главное окно из приложения
 	// Нужно передать fyneApp и window, но пока используем глобальный доступ
 	// Для этого нужно изменить сигнатуру или использовать другой подход
@@ -122,8 +118,7 @@ func CreateTabWithClose(browserTabs *BrowserTabs) {
 	browserTabs.AddTab(tabTitle, content)
 }
 
-// CreateProtobufTab создает вкладку для просмотра protobuf файлов
-func CreateProtobufTab(browserTabs *BrowserTabs, fyneApp fyne.App, parentWindow fyne.Window) {
+func CreateProtobufTab(browserTabs *tabManager, fyneApp fyne.App, parentWindow fyne.Window) {
 	content := ProtobufView(fyneApp, parentWindow, browserTabs)
 	// Используем undefined_{number} если файл не открыт
 	undefinedTabCounter++

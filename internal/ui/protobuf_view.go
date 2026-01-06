@@ -15,8 +15,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// ProtobufView создает UI для просмотра protobuf файлов
-func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *BrowserTabs) fyne.CanvasObject {
+func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabManager) fyne.CanvasObject {
 	// Парсер protobuf
 	parser, err := protobuf.NewParser()
 	if err != nil {
@@ -133,7 +132,7 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 				nil,
 				newScrollContainer,
 			)
-			// Обновляем контент вкладки через BrowserTabs
+			// Обновляем контент вкладки через tabManager
 			if browserTabs != nil {
 				browserTabs.UpdateTabContent(container.NewPadded(newBorder))
 			} else {
@@ -200,7 +199,7 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *Brows
 				nil,
 				newScrollContainer,
 			)
-			// Обновляем контент вкладки через BrowserTabs
+			// Обновляем контент вкладки через tabManager
 			if browserTabs != nil {
 				browserTabs.UpdateTabContent(container.NewPadded(newBorder))
 			}
