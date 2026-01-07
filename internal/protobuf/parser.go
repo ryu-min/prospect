@@ -173,6 +173,7 @@ func renumberMessagesRecursive(node *TreeNode, counter *int) {
 
 	if node.Type == "message" && node.Name != "root" {
 		node.Name = fmt.Sprintf("message_%d", *counter)
+		node.Type = node.Name
 		*counter++
 	}
 

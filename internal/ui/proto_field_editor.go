@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	nameColumnWidth = 120
-	typeColumnWidth = 100
+	nameColumnWidth = 150
+	typeColumnWidth = 120
 	columnSpacing   = 10
 )
 
@@ -24,10 +24,12 @@ type protoFieldEditor struct {
 func newProtoFieldEditor(uid widget.TreeNodeID, adapter *protoTreeAdapter, messageTypes []string) *protoFieldEditor {
 	availableTypes := []string{"string", "number", "bool"}
 	availableTypes = append(availableTypes, messageTypes...)
+	nameLabel := widget.NewLabel("")
+	nameLabel.Wrapping = fyne.TextTruncate
 	ew := &protoFieldEditor{
 		uid:            uid,
 		adapter:        adapter,
-		nameLabel:      widget.NewLabel(""),
+		nameLabel:      nameLabel,
 		typeCombo:      widget.NewSelect(availableTypes, nil),
 		entry:          widget.NewEntry(),
 		availableTypes: availableTypes,
