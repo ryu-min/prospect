@@ -40,7 +40,7 @@ func (r *tabManagerRenderer) Refresh() {
 		tabIndex := i
 		isSelected := r.tabs.selectedTab == tabIndex
 
-		tabHeader := NewTabHeader(
+		tabHeader := newTabHeader(
 			tab.title,
 			isSelected,
 			func() {
@@ -91,4 +91,3 @@ func (r *tabManagerRenderer) Objects() []fyne.CanvasObject {
 }
 
 func (r *tabManagerRenderer) Destroy() {}
-

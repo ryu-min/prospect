@@ -8,23 +8,20 @@ import (
 	"fyne.io/fyne/v2/storage"
 )
 
-// FileDialogState управляет состоянием диалогов файлов
-type FileDialogState struct {
+type fileDialogState struct {
 	lastOpenDirPath   string
 	lastSaveDirPath   string
 	lastSchemaDirPath string
 	dialogSize        fyne.Size
 }
 
-var globalDialogState *FileDialogState
+var globalDialogState *fileDialogState
 
-// GetFileDialogState возвращает глобальное состояние диалогов
-func GetFileDialogState() *FileDialogState {
+func getFileDialogState() *fileDialogState {
 	if globalDialogState == nil {
-		// Инициализируем с текущей рабочей директорией
 		wd, _ := os.Getwd()
-		globalDialogState = &FileDialogState{
-			dialogSize:        fyne.NewSize(800, 600), // Размер по умолчанию
+		globalDialogState = &fileDialogState{
+			dialogSize:        fyne.NewSize(800, 600),
 			lastOpenDirPath:   wd,
 			lastSaveDirPath:   wd,
 			lastSchemaDirPath: wd,
@@ -33,70 +30,62 @@ func GetFileDialogState() *FileDialogState {
 	return globalDialogState
 }
 
-// SetLastOpenDir сохраняет последнюю директорию для открытия файлов
-func (fds *FileDialogState) SetLastOpenDir(uri fyne.URI) {
+func (fds *fileDialogState) setLastOpenDir(uri fyne.URI) {
 	if uri == nil {
 		return
 	}
-	
-	// Получаем директорию из URI
+
 	path := uri.Path()
 	dir := filepath.Dir(path)
-	
-	// Проверяем, что директория существует
+
 	if info, err := os.Stat(dir); err == nil && info.IsDir() {
 		fds.lastOpenDirPath = dir
 	}
 }
 
-// SetLastSaveDir сохраняет последнюю директорию для сохранения файлов
-func (fds *FileDialogState) SetLastSaveDir(uri fyne.URI) {
+func (fds *fileDialogState) setLastSaveDir(uri fyne.URI) {
 	if uri == nil {
 		return
 	}
-	
+
 	path := uri.Path()
 	dir := filepath.Dir(path)
-	
+
 	if info, err := os.Stat(dir); err == nil && info.IsDir() {
 		fds.lastSaveDirPath = dir
 	}
 }
 
-// SetLastSchemaDir сохраняет последнюю директорию для схем
-func (fds *FileDialogState) SetLastSchemaDir(uri fyne.URI) {
+func (fds *fileDialogState) setLastSchemaDir(uri fyne.URI) {
 	if uri == nil {
 		return
 	}
-	
+
 	path := uri.Path()
 	dir := filepath.Dir(path)
-	
+
 	if info, err := os.Stat(dir); err == nil && info.IsDir() {
 		fds.lastSchemaDirPath = dir
 	}
 }
 
-// GetLastOpenDir возвращает последнюю директорию для открытия
-func (fds *FileDialogState) GetLastOpenDir() fyne.ListableURI {
+func (fds *fileDialogState) getLastOpenDir() fyne.ListableURI {
 	dirPath := fds.lastOpenDirPath
 	if dirPath == "" {
 		wd, _ := os.Getwd()
 		dirPath = wd
 	}
-	
-	// Проверяем, что директория существует
+
 	if info, err := os.Stat(dirPath); err != nil || !info.IsDir() {
 		wd, _ := os.Getwd()
 		dirPath = wd
 	}
-	
+
 	uri := storage.NewFileURI(dirPath)
 	if listableURI, err := storage.ListerForURI(uri); err == nil {
 		return listableURI
 	}
-	
-	// Fallback - возвращаем URI текущей директории
+
 	wd, _ := os.Getwd()
 	if listableURI, err := storage.ListerForURI(storage.NewFileURI(wd)); err == nil {
 		return listableURI
@@ -104,24 +93,23 @@ func (fds *FileDialogState) GetLastOpenDir() fyne.ListableURI {
 	return nil
 }
 
-// GetLastSaveDir возвращает последнюю директорию для сохранения
-func (fds *FileDialogState) GetLastSaveDir() fyne.ListableURI {
+func (fds *fileDialogState) getLastSaveDir() fyne.ListableURI {
 	dirPath := fds.lastSaveDirPath
 	if dirPath == "" {
 		wd, _ := os.Getwd()
 		dirPath = wd
 	}
-	
+
 	if info, err := os.Stat(dirPath); err != nil || !info.IsDir() {
 		wd, _ := os.Getwd()
 		dirPath = wd
 	}
-	
+
 	uri := storage.NewFileURI(dirPath)
 	if listableURI, err := storage.ListerForURI(uri); err == nil {
 		return listableURI
 	}
-	
+
 	wd, _ := os.Getwd()
 	if listableURI, err := storage.ListerForURI(storage.NewFileURI(wd)); err == nil {
 		return listableURI
@@ -129,24 +117,23 @@ func (fds *FileDialogState) GetLastSaveDir() fyne.ListableURI {
 	return nil
 }
 
-// GetLastSchemaDir возвращает последнюю директорию для схем
-func (fds *FileDialogState) GetLastSchemaDir() fyne.ListableURI {
+func (fds *fileDialogState) getLastSchemaDir() fyne.ListableURI {
 	dirPath := fds.lastSchemaDirPath
 	if dirPath == "" {
 		wd, _ := os.Getwd()
 		dirPath = wd
 	}
-	
+
 	if info, err := os.Stat(dirPath); err != nil || !info.IsDir() {
 		wd, _ := os.Getwd()
 		dirPath = wd
 	}
-	
+
 	uri := storage.NewFileURI(dirPath)
 	if listableURI, err := storage.ListerForURI(uri); err == nil {
 		return listableURI
 	}
-	
+
 	wd, _ := os.Getwd()
 	if listableURI, err := storage.ListerForURI(storage.NewFileURI(wd)); err == nil {
 		return listableURI
@@ -154,13 +141,10 @@ func (fds *FileDialogState) GetLastSchemaDir() fyne.ListableURI {
 	return nil
 }
 
-// SetDialogSize устанавливает размер диалога
-func (fds *FileDialogState) SetDialogSize(size fyne.Size) {
+func (fds *fileDialogState) setDialogSize(size fyne.Size) {
 	fds.dialogSize = size
 }
 
-// GetDialogSize возвращает размер диалога
-func (fds *FileDialogState) GetDialogSize() fyne.Size {
+func (fds *fileDialogState) getDialogSize() fyne.Size {
 	return fds.dialogSize
 }
-

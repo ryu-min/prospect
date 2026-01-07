@@ -15,8 +15,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabManager) fyne.CanvasObject {
-	// Парсер protobuf
+func protoView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabManager) fyne.CanvasObject {
 	parser, err := protobuf.NewParser()
 	if err != nil {
 		errorLabel := widget.NewLabel(fmt.Sprintf("Error: %v", err))
@@ -24,29 +23,22 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabMa
 		return container.NewPadded(errorLabel)
 	}
 
-	// Дерево для отображения
 	var currentTree *protobuf.TreeNode
 	var currentFilePath string // Путь к текущему открытому файлу
 
-	// Виджет дерева для визуального отображения
-	treeWidget := CreateProtobufTree(nil)
+	treeWidget := createProtoTree(nil)
 
-	// Контейнер для дерева (будет обновляться)
 	treeScrollContainer := container.NewScroll(treeWidget)
 
-	// Получаем состояние диалогов
-	dialogState := GetFileDialogState()
+	dialogState := getFileDialogState()
 
-	// Объявляем переменные для кнопок и панели (определяются позже)
 	var openBtn *widget.Button
 	var saveBtn *widget.Button
 	var applySchemaBtn *widget.Button
 	var exportJSONBtn *widget.Button
 	var buttonPanel fyne.CanvasObject
 
-	// Кнопка открытия файла
-	openBtn = widget.NewButton("Open binary protobuf file", func() {
-		// Создаем диалог с сохранением позиции
+	openBtn = widget.NewButton("Open binary proto file", func() {
 		fileDialog := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
 			if err != nil {
 				log.Printf("Dialog error: %v", err)
@@ -58,19 +50,15 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabMa
 			}
 			defer reader.Close()
 
-			// Сохраняем путь к файлу
 			currentFilePath = reader.URI().Path()
 
-			// Обновляем название вкладки с именем файла
 			if browserTabs != nil {
 				fileName := filepath.Base(currentFilePath)
 				browserTabs.UpdateTabTitle(fileName)
 			}
 
-			// Сохраняем последнюю директорию
-			dialogState.SetLastOpenDir(reader.URI())
+			dialogState.setLastOpenDir(reader.URI())
 
-			// Читаем данные
 			data := make([]byte, 0)
 			buf := make([]byte, 4096)
 			for {
@@ -83,8 +71,7 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabMa
 				}
 			}
 
-			// Парсим protobuf
-			log.Printf("Parsing protobuf file: %s", reader.URI().Path())
+			log.Printf("Parsing proto file: %s", reader.URI().Path())
 
 			tree, err := parser.ParseRaw(data)
 			if err != nil {
@@ -94,37 +81,28 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabMa
 
 			currentTree = tree
 
-			// ШАГ 3: Отображаем дерево в виде дерева (widget.Tree)
-			adapter := NewProtobufTreeAdapter(tree)
+			adapter := newProtoTreeAdapter(tree)
 			adapter.SetWindow(parentWindow) // Устанавливаем окно для диалогов
 
-			// Создаем виджет дерева
 			newTreeWidget := widget.NewTree(adapter.ChildUIDs, adapter.IsBranch, adapter.CreateNode, adapter.UpdateNode)
 
-			// Проверяем, что root имеет детей и открываем его
-			// В Fyne widget.Tree использует пустую строку "" для root
 			rootChildren := adapter.ChildUIDs("")
 
-			// ВАЖНО: Открываем root ДО добавления в контейнер (используем пустую строку)
 			if len(rootChildren) > 0 {
 				newTreeWidget.OpenBranch("")
 			}
 
-			// Обновляем виджет дерева
 			newTreeWidget.Refresh()
 
 			treeWidget = newTreeWidget
 
-			// Обновляем scroll контейнер с деревом
 			newScrollContainer := container.NewScroll(newTreeWidget)
 			newScrollContainer.Refresh()
 			treeScrollContainer = newScrollContainer
 
-			// ВАЖНО: Принудительно запрашиваем данные для root
 			_ = adapter.ChildUIDs("root")
 			_ = adapter.IsBranch("root")
 
-			// Обновляем Border контейнер
 			newBorder := container.NewBorder(
 				buttonPanel,
 				nil,
@@ -132,29 +110,25 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabMa
 				nil,
 				newScrollContainer,
 			)
-			// Обновляем контент вкладки через tabManager
 			if browserTabs != nil {
 				browserTabs.UpdateTabContent(container.NewPadded(newBorder))
 			} else {
 				log.Printf("Error: browserTabs is nil")
 			}
-			log.Printf("Protobuf file parsed successfully, tree updated")
+			log.Printf("Proto file parsed successfully, tree updated")
 		}, parentWindow)
 
-		// Устанавливаем начальную директорию
-		if lastDir := dialogState.GetLastOpenDir(); lastDir != nil {
+		if lastDir := dialogState.getLastOpenDir(); lastDir != nil {
 			fileDialog.SetLocation(lastDir)
 		}
 
-		// Показываем диалог
-		fileDialog.Resize(dialogState.GetDialogSize())
+		fileDialog.Resize(dialogState.getDialogSize())
 		fileDialog.Show()
 	})
 
-	// Кнопка применения схемы
 	applySchemaBtn = widget.NewButton("Apply proto schema", func() {
 		if currentTree == nil {
-			dialog.ShowInformation("Information", "Please open a protobuf file first", parentWindow)
+			dialog.ShowInformation("Information", "Please open a proto file first", parentWindow)
 			return
 		}
 
@@ -168,13 +142,11 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabMa
 			}
 			defer reader.Close()
 
-			// Сохраняем последнюю директорию для схем
-			dialogState.SetLastSchemaDir(reader.URI())
+			dialogState.setLastSchemaDir(reader.URI())
 
 			schemaPath := reader.URI().Path()
 			log.Printf("Applying schema: %s", schemaPath)
 
-			// TODO: Реализовать применение схемы
 			tree, err := parser.ApplySchema(currentTree, schemaPath)
 			if err != nil {
 				dialog.ShowError(fmt.Errorf("error applying schema: %w", err), parentWindow)
@@ -182,16 +154,13 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabMa
 			}
 
 			currentTree = tree
-			// Обновляем виджет дерева
-			adapter := NewProtobufTreeAdapter(tree)
+			adapter := newProtoTreeAdapter(tree)
 			adapter.SetWindow(parentWindow) // Устанавливаем окно для диалогов
 			newTreeWidget := widget.NewTree(adapter.ChildUIDs, adapter.IsBranch, adapter.CreateNode, adapter.UpdateNode)
 			newTreeWidget.OpenBranch("root")
 			treeWidget = newTreeWidget
-			// Обновляем scroll контейнер
 			newScrollContainer := container.NewScroll(newTreeWidget)
 			treeScrollContainer = newScrollContainer
-			// Обновляем Border контейнер
 			newBorder := container.NewBorder(
 				buttonPanel,
 				nil,
@@ -199,31 +168,26 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabMa
 				nil,
 				newScrollContainer,
 			)
-			// Обновляем контент вкладки через tabManager
 			if browserTabs != nil {
 				browserTabs.UpdateTabContent(container.NewPadded(newBorder))
 			}
 			log.Printf("Schema applied successfully, tree updated")
 		}, parentWindow)
 
-		// Устанавливаем начальную директорию
-		if lastDir := dialogState.GetLastSchemaDir(); lastDir != nil {
+		if lastDir := dialogState.getLastSchemaDir(); lastDir != nil {
 			fileDialog.SetLocation(lastDir)
 		}
 
-		// Показываем диалог
-		fileDialog.Resize(dialogState.GetDialogSize())
+		fileDialog.Resize(dialogState.getDialogSize())
 		fileDialog.Show()
 	})
 
-	// Кнопка сохранения
 	saveBtn = widget.NewButton("Save", func() {
 		if currentTree == nil {
-			dialog.ShowInformation("Information", "Please open a protobuf file first", parentWindow)
+			dialog.ShowInformation("Information", "Please open a proto file first", parentWindow)
 			return
 		}
 
-		// Сериализуем дерево в бинарный формат
 		serializer := protobuf.NewSerializer(parser.GetProtocPath())
 		binaryData, err := serializer.SerializeRaw(currentTree)
 		if err != nil {
@@ -231,7 +195,6 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabMa
 			return
 		}
 
-		// Создаем диалог сохранения
 		saveDialog := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
 			if err != nil {
 				log.Printf("Save dialog error: %v", err)
@@ -243,27 +206,22 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabMa
 			}
 			defer writer.Close()
 
-			// Сохраняем путь к файлу
 			currentFilePath = writer.URI().Path()
 
-			// Сохраняем последнюю директорию
-			dialogState.SetLastSaveDir(writer.URI())
+			dialogState.setLastSaveDir(writer.URI())
 
-			// Записываем данные
 			if _, err := writer.Write(binaryData); err != nil {
 				dialog.ShowError(fmt.Errorf("write error: %w", err), parentWindow)
 				return
 			}
 
-			dialog.ShowInformation("Success", "Protobuf file saved", parentWindow)
-			log.Printf("Protobuf file saved: %s", currentFilePath)
+			dialog.ShowInformation("Success", "Proto file saved", parentWindow)
+			log.Printf("Proto file saved: %s", currentFilePath)
 		}, parentWindow)
 
-		// Устанавливаем начальную директорию
-		if lastDir := dialogState.GetLastSaveDir(); lastDir != nil {
+		if lastDir := dialogState.getLastSaveDir(); lastDir != nil {
 			saveDialog.SetLocation(lastDir)
 		} else if currentFilePath != "" {
-			// Используем директорию текущего файла
 			dirPath := filepath.Dir(currentFilePath)
 			uri := storage.NewFileURI(dirPath)
 			if listableURI, err := storage.ListerForURI(uri); err == nil {
@@ -271,15 +229,13 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabMa
 			}
 		}
 
-		// Показываем диалог
-		saveDialog.Resize(dialogState.GetDialogSize())
+		saveDialog.Resize(dialogState.getDialogSize())
 		saveDialog.Show()
 	})
 
-	// Кнопка экспорта в JSON
 	exportJSONBtn = widget.NewButton("Export to JSON", func() {
 		if currentTree == nil {
-			dialog.ShowInformation("Information", "Please open a protobuf file first", parentWindow)
+			dialog.ShowInformation("Information", "Please open a proto file first", parentWindow)
 			return
 		}
 
@@ -299,8 +255,7 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabMa
 			}
 			defer writer.Close()
 
-			// Сохраняем последнюю директорию для сохранения
-			dialogState.SetLastSaveDir(writer.URI())
+			dialogState.setLastSaveDir(writer.URI())
 
 			if _, err := writer.Write(jsonData); err != nil {
 				dialog.ShowError(fmt.Errorf("write error: %w", err), parentWindow)
@@ -310,17 +265,14 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabMa
 			dialog.ShowInformation("Success", "JSON file saved", parentWindow)
 		}, parentWindow)
 
-		// Устанавливаем начальную директорию
-		if lastDir := dialogState.GetLastSaveDir(); lastDir != nil {
+		if lastDir := dialogState.getLastSaveDir(); lastDir != nil {
 			fileDialog.SetLocation(lastDir)
 		}
 
-		// Показываем диалог
-		fileDialog.Resize(dialogState.GetDialogSize())
+		fileDialog.Resize(dialogState.getDialogSize())
 		fileDialog.Show()
 	})
 
-	// Панель кнопок
 	buttonPanel = container.NewHBox(
 		openBtn,
 		saveBtn,
@@ -328,7 +280,6 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabMa
 		exportJSONBtn,
 	)
 
-	// Основной контейнер - создаем функцию для обновления
 	createMainBorder := func() fyne.CanvasObject {
 		return container.NewBorder(
 			buttonPanel,         // верх - кнопки
@@ -345,7 +296,6 @@ func ProtobufView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabMa
 	return container.NewPadded(content)
 }
 
-// formatTree форматирует дерево для отображения
 func formatTree(node *protobuf.TreeNode, indent int) string {
 	if node == nil {
 		return "(empty tree)\n"
@@ -358,14 +308,13 @@ func formatTree(node *protobuf.TreeNode, indent int) string {
 
 	result := ""
 	if node.Name == "root" {
-		result += "Protobuf Root\n"
+		result += "Proto Root\n"
 		result += strings.Repeat("=", 50) + "\n"
 		if len(node.Children) == 0 {
 			result += "(no data)\n"
 			return result
 		}
 	} else {
-		// Форматируем узел
 		result += fmt.Sprintf("%s%s (field_%d, %s)", indentStr, node.Name, node.FieldNum, node.Type)
 		if node.Value != nil {
 			result += fmt.Sprintf(": %v", node.Value)
@@ -379,7 +328,6 @@ func formatTree(node *protobuf.TreeNode, indent int) string {
 		result += "\n"
 	}
 
-	// Рекурсивно форматируем дочерние узлы
 	for _, child := range node.Children {
 		result += formatTree(child, indent+1)
 	}
@@ -387,8 +335,7 @@ func formatTree(node *protobuf.TreeNode, indent int) string {
 	return result
 }
 
-// TableRow представляет строку таблицы
-type TableRow struct {
+type tableRow struct {
 	FieldName string
 	FieldNum  int
 	Type      string
@@ -396,9 +343,8 @@ type TableRow struct {
 	Children  int
 }
 
-// buildTableData преобразует дерево в табличные данные
-func buildTableData(node *protobuf.TreeNode) []TableRow {
-	var rows []TableRow
+func buildTableData(node *protobuf.TreeNode) []tableRow {
+	var rows []tableRow
 
 	var traverse func(*protobuf.TreeNode, int)
 	traverse = func(n *protobuf.TreeNode, level int) {
@@ -406,7 +352,6 @@ func buildTableData(node *protobuf.TreeNode) []TableRow {
 			return
 		}
 
-		// Пропускаем root узел, но обрабатываем его детей
 		if n.Name != "root" {
 			valueStr := ""
 			if n.Value != nil {
@@ -416,7 +361,7 @@ func buildTableData(node *protobuf.TreeNode) []TableRow {
 				valueStr += " [repeated]"
 			}
 
-			rows = append(rows, TableRow{
+			rows = append(rows, tableRow{
 				FieldName: n.Name,
 				FieldNum:  n.FieldNum,
 				Type:      n.Type,
@@ -425,7 +370,6 @@ func buildTableData(node *protobuf.TreeNode) []TableRow {
 			})
 		}
 
-		// Рекурсивно обрабатываем дочерние узлы
 		for _, child := range n.Children {
 			traverse(child, level+1)
 		}
@@ -435,13 +379,11 @@ func buildTableData(node *protobuf.TreeNode) []TableRow {
 	return rows
 }
 
-// createTableWidget создает виджет таблицы из данных
-func createTableWidget(data []TableRow) fyne.CanvasObject {
+func createTableWidget(data []tableRow) fyne.CanvasObject {
 	if len(data) == 0 {
 		return widget.NewLabel("(no data)")
 	}
 
-	// Создаем заголовки таблицы (жирным шрифтом)
 	headerName := widget.NewLabel("Field Name")
 	headerName.TextStyle = fyne.TextStyle{Bold: true}
 	headerNum := widget.NewLabel("Field #")
@@ -461,7 +403,6 @@ func createTableWidget(data []TableRow) fyne.CanvasObject {
 		headerChildren,
 	)
 
-	// Создаем строки таблицы
 	rows := make([]fyne.CanvasObject, 0, len(data))
 	for _, row := range data {
 		rowContainer := container.NewGridWithColumns(5,
@@ -474,7 +415,6 @@ func createTableWidget(data []TableRow) fyne.CanvasObject {
 		rows = append(rows, rowContainer)
 	}
 
-	// Объединяем заголовок и строки
 	content := container.NewVBox(header)
 	for _, row := range rows {
 		content.Add(row)

@@ -9,19 +9,19 @@ import (
 
 type tabManager struct {
 	widget.BaseWidget
-	tabs        []*TabData
+	tabs        []*tabData
 	selectedTab int
 	addCallback func()
 }
 
-type TabData struct {
+type tabData struct {
 	title   string
 	content fyne.CanvasObject
 }
 
 func newTabManager() *tabManager {
 	tm := &tabManager{
-		tabs:        make([]*TabData, 0),
+		tabs:        make([]*tabData, 0),
 		selectedTab: -1,
 	}
 	tm.ExtendBaseWidget(tm)
@@ -34,7 +34,7 @@ func (tm *tabManager) AddTab(title string, content fyne.CanvasObject) {
 		title = "Tab"
 	}
 
-	tab := &TabData{
+	tab := &tabData{
 		title:   title,
 		content: content,
 	}
