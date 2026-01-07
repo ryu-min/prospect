@@ -24,7 +24,15 @@ func NewMainWindow(fyneApp fyne.App) fyne.Window {
 		createTabWithClose(browserTabs)
 	})
 
-	createProtoTab(browserTabs, fyneApp, window)
+	if err := loadTabState(browserTabs, fyneApp, window); err != nil {
+		createProtoTab(browserTabs, fyneApp, window)
+	} else if len(browserTabs.tabs) == 0 {
+		createProtoTab(browserTabs, fyneApp, window)
+	}
+
+	window.SetOnClosed(func() {
+		saveTabState(browserTabs)
+	})
 
 	window.SetContent(browserTabs)
 	return window

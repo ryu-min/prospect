@@ -15,8 +15,9 @@ type tabManager struct {
 }
 
 type tabData struct {
-	title   string
-	content fyne.CanvasObject
+	title    string
+	content  fyne.CanvasObject
+	filePath string
 }
 
 func newTabManager() *tabManager {
@@ -29,14 +30,24 @@ func newTabManager() *tabManager {
 }
 
 func (tm *tabManager) AddTab(title string, content fyne.CanvasObject) {
+	tm.addTabWithoutSave(title, content)
+	go saveTabState(tm)
+}
+
+func (tm *tabManager) addTabWithoutSave(title string, content fyne.CanvasObject) {
+	tm.addTabWithPathWithoutSave(title, content, "")
+}
+
+func (tm *tabManager) addTabWithPathWithoutSave(title string, content fyne.CanvasObject, filePath string) {
 	tabCounter++
 	if title == "" {
 		title = "Tab"
 	}
 
 	tab := &tabData{
-		title:   title,
-		content: content,
+		title:    title,
+		content:  content,
+		filePath: filePath,
 	}
 	tm.tabs = append(tm.tabs, tab)
 	tm.selectedTab = len(tm.tabs) - 1
@@ -70,9 +81,15 @@ func (tm *tabManager) RemoveTab(index int) {
 
 	log.Printf("Tab '%s' removed, remaining tabs: %d", title, len(tm.tabs))
 	tm.Refresh()
+	go saveTabState(tm)
 }
 
 func (tm *tabManager) SelectTab(index int) {
+	tm.selectTabWithoutSave(index)
+	go saveTabState(tm)
+}
+
+func (tm *tabManager) selectTabWithoutSave(index int) {
 	if index >= 0 && index < len(tm.tabs) {
 		tm.selectedTab = index
 		tm.Refresh()
@@ -96,8 +113,16 @@ func (tm *tabManager) UpdateTabTitle(title string) {
 	if tm.selectedTab >= 0 && tm.selectedTab < len(tm.tabs) {
 		tm.tabs[tm.selectedTab].title = title
 		tm.Refresh()
+		go saveTabState(tm)
 	} else {
 		log.Printf("Error: failed to update title: selectedTab=%d, len(tabs)=%d", tm.selectedTab, len(tm.tabs))
+	}
+}
+
+func (tm *tabManager) SetTabFilePath(filePath string) {
+	if tm.selectedTab >= 0 && tm.selectedTab < len(tm.tabs) {
+		tm.tabs[tm.selectedTab].filePath = filePath
+		go saveTabState(tm)
 	}
 }
 

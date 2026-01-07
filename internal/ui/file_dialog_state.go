@@ -18,11 +18,14 @@ var globalDialogState *fileDialogState
 
 func getFileDialogState() *fileDialogState {
 	if globalDialogState == nil {
-		wd, _ := os.Getwd()
-		globalDialogState = &fileDialogState{
-			dialogSize:        fyne.NewSize(800, 600),
-			lastDirPath:       wd,
-			lastSchemaDirPath: wd,
+		loadFileDialogState()
+		if globalDialogState == nil {
+			wd, _ := os.Getwd()
+			globalDialogState = &fileDialogState{
+				dialogSize:        fyne.NewSize(800, 600),
+				lastDirPath:       wd,
+				lastSchemaDirPath: wd,
+			}
 		}
 	}
 	return globalDialogState
@@ -38,6 +41,7 @@ func (fds *fileDialogState) setLastDir(uri fyne.URI) {
 
 	if info, err := os.Stat(dir); err == nil && info.IsDir() {
 		fds.lastDirPath = dir
+		saveFileDialogState()
 	}
 }
 
@@ -59,6 +63,7 @@ func (fds *fileDialogState) setLastSchemaDir(uri fyne.URI) {
 
 	if info, err := os.Stat(dir); err == nil && info.IsDir() {
 		fds.lastSchemaDirPath = dir
+		saveFileDialogState()
 	}
 }
 
@@ -120,6 +125,7 @@ func (fds *fileDialogState) getLastSchemaDir() fyne.ListableURI {
 
 func (fds *fileDialogState) setDialogSize(size fyne.Size) {
 	fds.dialogSize = size
+	saveFileDialogState()
 }
 
 func (fds *fileDialogState) getDialogSize() fyne.Size {

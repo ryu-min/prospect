@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -16,6 +17,10 @@ import (
 )
 
 func protoView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabManager) fyne.CanvasObject {
+	return protoViewWithFile(fyneApp, parentWindow, browserTabs, "")
+}
+
+func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabManager, filePath string) fyne.CanvasObject {
 	parser, err := protobuf.NewParser()
 	if err != nil {
 		errorLabel := widget.NewLabel(fmt.Sprintf("Error: %v", err))
@@ -24,7 +29,10 @@ func protoView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabManag
 	}
 
 	var currentTree *protobuf.TreeNode
-	var currentFilePath string // Путь к текущему открытому файлу
+	var currentFilePath string
+	if filePath != "" {
+		currentFilePath = filePath
+	}
 
 	treeWidget := createProtoTree(nil)
 
@@ -55,6 +63,7 @@ func protoView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabManag
 			if browserTabs != nil {
 				fileName := filepath.Base(currentFilePath)
 				browserTabs.UpdateTabTitle(fileName)
+				browserTabs.SetTabFilePath(currentFilePath)
 			}
 
 			dialogState.setLastOpenDir(reader.URI())
@@ -209,6 +218,10 @@ func protoView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabManag
 
 			currentFilePath = writer.URI().Path()
 
+			if browserTabs != nil {
+				browserTabs.SetTabFilePath(currentFilePath)
+			}
+
 			dialogState.setLastSaveDir(writer.URI())
 
 			if _, err := writer.Write(binaryData); err != nil {
@@ -281,6 +294,12 @@ func protoView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabManag
 		exportJSONBtn,
 	)
 
+	if filePath != "" {
+		if err := loadFileIntoView(filePath, parser, &currentTree, &treeWidget, &treeScrollContainer, parentWindow, browserTabs, dialogState, &currentFilePath); err != nil {
+			log.Printf("Failed to load file %s: %v", filePath, err)
+		}
+	}
+
 	createMainBorder := func() fyne.CanvasObject {
 		return container.NewBorder(
 			buttonPanel,         // верх - кнопки
@@ -295,6 +314,52 @@ func protoView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabManag
 	content := mainBorder
 
 	return container.NewPadded(content)
+}
+
+func loadFileIntoView(filePath string, parser *protobuf.Parser, currentTree **protobuf.TreeNode, treeWidget **widget.Tree, treeScrollContainer **container.Scroll, parentWindow fyne.Window, browserTabs *tabManager, dialogState *fileDialogState, currentFilePath *string) error {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to read file: %w", err)
+	}
+
+	*currentFilePath = filePath
+
+	if browserTabs != nil {
+		browserTabs.SetTabFilePath(filePath)
+	}
+
+	dialogState.setLastOpenDir(storage.NewFileURI(filePath))
+
+	log.Printf("Parsing proto file: %s", filePath)
+
+	tree, err := parser.ParseRaw(data)
+	if err != nil {
+		return fmt.Errorf("parsing error: %w", err)
+	}
+
+	*currentTree = tree
+
+	adapter := newProtoTreeAdapter(tree)
+	adapter.SetWindow(parentWindow)
+
+	newTreeWidget := widget.NewTree(adapter.ChildUIDs, adapter.IsBranch, adapter.CreateNode, adapter.UpdateNode)
+	adapter.SetTreeWidget(newTreeWidget)
+
+	rootChildren := adapter.ChildUIDs("")
+
+	if len(rootChildren) > 0 {
+		newTreeWidget.OpenBranch("")
+	}
+
+	newTreeWidget.Refresh()
+
+	*treeWidget = newTreeWidget
+
+	newScrollContainer := container.NewScroll(newTreeWidget)
+	newScrollContainer.Refresh()
+	*treeScrollContainer = newScrollContainer
+
+	return nil
 }
 
 func formatTree(node *protobuf.TreeNode, indent int) string {
