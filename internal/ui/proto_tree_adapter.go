@@ -150,29 +150,36 @@ func (a *protoTreeAdapter) UpdateNode(uid widget.TreeNodeID, branch bool, obj fy
 			a.handleTypeChange(actualUID, node.Type, selectedType)
 		}
 
-		valueStr := a.nodeValueToString(node)
+		if a.isMessageType(node.Type) {
+			editWidget.entry.Disable()
+			editWidget.entry.SetText("")
+			editWidget.entry.OnChanged = nil
+		} else {
+			editWidget.entry.Enable()
+			valueStr := a.nodeValueToString(node)
 
-		editWidget.entry.OnChanged = nil
-		editWidget.entry.SetText(valueStr)
+			editWidget.entry.OnChanged = nil
+			editWidget.entry.SetText(valueStr)
 
-		lastValidValue := valueStr
-		var isUpdating bool
+			lastValidValue := valueStr
+			var isUpdating bool
 
-		fieldType := node.Type
-		editWidget.entry.OnChanged = func(value string) {
-			if isUpdating {
-				return
+			fieldType := node.Type
+			editWidget.entry.OnChanged = func(value string) {
+				if isUpdating {
+					return
+				}
+
+				if !a.validateValue(value, fieldType) {
+					isUpdating = true
+					editWidget.entry.SetText(lastValidValue)
+					isUpdating = false
+					return
+				}
+
+				lastValidValue = value
+				a.updateNodeValue(actualUID, value, fieldType)
 			}
-
-			if !a.validateValue(value, fieldType) {
-				isUpdating = true
-				editWidget.entry.SetText(lastValidValue)
-				isUpdating = false
-				return
-			}
-
-			lastValidValue = value
-			a.updateNodeValue(actualUID, value, fieldType)
 		}
 		editWidget.Refresh()
 		return
@@ -184,6 +191,15 @@ func (a *protoTreeAdapter) updateEntryValidation(uid widget.TreeNodeID, newType 
 	if !ok {
 		return
 	}
+
+	if a.isMessageType(newType) {
+		editWidget.entry.Disable()
+		editWidget.entry.SetText("")
+		editWidget.entry.OnChanged = nil
+		return
+	}
+
+	editWidget.entry.Enable()
 
 	node := a.getNodeByUID(uid)
 	if node == nil {
