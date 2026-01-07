@@ -364,22 +364,14 @@ func (a *protoTreeAdapter) showTypeChangeDialog(oldType, newType string, onConfi
 		checkbox,
 	)
 
-	var customDialog dialog.Dialog
-	confirmBtn := widget.NewButton("Clear", func() {
-		customDialog.Hide()
-		onConfirm()
-	})
-	cancelBtn := widget.NewButton("Cancel", func() {
-		customDialog.Hide()
-		onCancel()
-	})
-
-	buttons := container.NewHBox(confirmBtn, cancelBtn)
-	dialogContent := container.NewVBox(content, buttons)
-
-	customDialog = dialog.NewCustom("Type Change Confirmation", "Close", dialogContent, a.window)
-	customDialog.Resize(fyne.NewSize(400, 200))
-	customDialog.Show()
+	confirmDialog := dialog.NewCustomConfirm("Type Change Confirmation", "Yes", "No", content, func(confirmed bool) {
+		if confirmed {
+			onConfirm()
+		} else {
+			onCancel()
+		}
+	}, a.window)
+	confirmDialog.Show()
 }
 
 func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newType string) {
@@ -583,4 +575,3 @@ func createProtoTree(tree *protobuf.TreeNode) *widget.Tree {
 
 	return treeWidget
 }
-
