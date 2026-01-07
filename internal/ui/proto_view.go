@@ -82,9 +82,10 @@ func protoView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabManag
 			currentTree = tree
 
 			adapter := newProtoTreeAdapter(tree)
-			adapter.SetWindow(parentWindow) // Устанавливаем окно для диалогов
+			adapter.SetWindow(parentWindow)
 
 			newTreeWidget := widget.NewTree(adapter.ChildUIDs, adapter.IsBranch, adapter.CreateNode, adapter.UpdateNode)
+			adapter.SetTreeWidget(newTreeWidget)
 
 			rootChildren := adapter.ChildUIDs("")
 

@@ -19,6 +19,7 @@ type protoTreeAdapter struct {
 	tree        *protobuf.TreeNode
 	editWidgets map[widget.TreeNodeID]*protoFieldEditor
 	window      fyne.Window
+	treeWidget  *widget.Tree
 }
 
 func newProtoTreeAdapter(tree *protobuf.TreeNode) *protoTreeAdapter {
@@ -31,6 +32,10 @@ func newProtoTreeAdapter(tree *protobuf.TreeNode) *protoTreeAdapter {
 
 func (a *protoTreeAdapter) SetWindow(window fyne.Window) {
 	a.window = window
+}
+
+func (a *protoTreeAdapter) SetTreeWidget(treeWidget *widget.Tree) {
+	a.treeWidget = treeWidget
 }
 
 func (a *protoTreeAdapter) ChildUIDs(uid widget.TreeNodeID) []widget.TreeNodeID {
@@ -67,7 +72,7 @@ func (a *protoTreeAdapter) IsBranch(uid widget.TreeNodeID) bool {
 	if node == nil {
 		return false
 	}
-	return len(node.Children) > 0
+	return node.Type == "message" || len(node.Children) > 0
 }
 
 func (a *protoTreeAdapter) CreateNode(branch bool) fyne.CanvasObject {
@@ -77,7 +82,8 @@ func (a *protoTreeAdapter) CreateNode(branch bool) fyne.CanvasObject {
 		return label
 	}
 
-	ew := newProtoFieldEditor("", a)
+	messageTypes := a.getAllMessageTypes()
+	ew := newProtoFieldEditor("", a, messageTypes)
 	return ew
 }
 
@@ -104,12 +110,22 @@ func (a *protoTreeAdapter) UpdateNode(uid widget.TreeNodeID, branch bool, obj fy
 					text = "Proto Root (no data)"
 				}
 			} else {
-				text = fmt.Sprintf("%s (field_%d, %s)", node.Name, node.FieldNum, node.Type)
-				if node.IsRepeated {
-					text += " [repeated]"
-				}
-				if len(node.Children) > 0 {
-					text += fmt.Sprintf(" [%d children]", len(node.Children))
+				if node.Type == "message" {
+					text = fmt.Sprintf("field_%d - %s", node.FieldNum, node.Name)
+					if node.IsRepeated {
+						text += " [repeated]"
+					}
+					if len(node.Children) > 0 {
+						text += fmt.Sprintf(" [%d children]", len(node.Children))
+					}
+				} else {
+					text = fmt.Sprintf("%s (field_%d, %s)", node.Name, node.FieldNum, node.Type)
+					if node.IsRepeated {
+						text += " [repeated]"
+					}
+					if len(node.Children) > 0 {
+						text += fmt.Sprintf(" [%d children]", len(node.Children))
+					}
 				}
 			}
 			label.SetText(text)
@@ -121,21 +137,35 @@ func (a *protoTreeAdapter) UpdateNode(uid widget.TreeNodeID, branch bool, obj fy
 		editWidget.uid = actualUID
 		a.editWidgets[actualUID] = editWidget
 
-		nameText := fmt.Sprintf("field_%d", node.FieldNum)
+		var nameText string
+		if node.Type == "message" {
+			nameText = fmt.Sprintf("message_%d", node.FieldNum)
+		} else {
+			nameText = fmt.Sprintf("field_%d", node.FieldNum)
+		}
 		editWidget.nameLabel.SetText(nameText)
 
-		typeText := node.Type
+		messageTypes := a.getAllMessageTypes()
+		baseTypes := []string{"string", "number", "bool"}
+		allTypes := make([]string, 0, len(baseTypes)+len(messageTypes))
+		allTypes = append(allTypes, baseTypes...)
+		allTypes = append(allTypes, messageTypes...)
+
 		typeExists := false
-		for _, t := range editWidget.availableTypes {
-			if t == typeText {
+		for _, t := range allTypes {
+			if t == node.Type {
 				typeExists = true
 				break
 			}
 		}
-		if !typeExists && typeText != "" {
-			editWidget.availableTypes = append(editWidget.availableTypes, typeText)
-			editWidget.typeCombo.Options = editWidget.availableTypes
+		if !typeExists && node.Type != "" {
+			allTypes = append(allTypes, node.Type)
 		}
+
+		editWidget.availableTypes = allTypes
+		editWidget.typeCombo.Options = allTypes
+
+		typeText := node.Type
 
 		editWidget.typeCombo.OnChanged = nil
 		editWidget.typeCombo.SetSelected(typeText)
@@ -229,6 +259,10 @@ func (a *protoTreeAdapter) nodeValueToString(node *protobuf.TreeNode) string {
 
 func (a *protoTreeAdapter) validateValue(value string, fieldType string) bool {
 	if value == "" {
+		return true
+	}
+
+	if a.isMessageType(fieldType) || fieldType == "message" {
 		return true
 	}
 
@@ -380,6 +414,28 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 		return
 	}
 
+	isMessageType := a.isMessageType(newType)
+	if isMessageType && oldType != "message" {
+		sourceMessage := a.findMessageByName(newType)
+		if sourceMessage != nil {
+			node.Type = "message"
+			node.Name = newType
+			node.Value = nil
+			node.Children = a.copyMessageChildren(sourceMessage)
+		} else {
+			node.Type = "message"
+			messageCounter := a.countMessages(a.tree)
+			node.Name = fmt.Sprintf("message_%d", messageCounter+1)
+			node.Value = nil
+			node.Children = make([]*protobuf.TreeNode, 0)
+		}
+		delete(a.editWidgets, uid)
+		if a.treeWidget != nil {
+			a.treeWidget.Refresh()
+		}
+		return
+	}
+
 	canSeamlessChange := false
 	valueStr := a.nodeValueToString(node)
 	if (oldType == "bool" && newType == "number") || (oldType == "number" && newType == "bool") {
@@ -432,6 +488,16 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 			}
 		},
 	)
+}
+
+func (a *protoTreeAdapter) isMessageType(typeName string) bool {
+	messageTypes := a.getAllMessageTypes()
+	for _, msgType := range messageTypes {
+		if msgType == typeName {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *protoTreeAdapter) updateNodeValue(uid widget.TreeNodeID, valueStr string, fieldType string) {
@@ -532,6 +598,101 @@ func (a *protoTreeAdapter) getNodeByUID(uid widget.TreeNodeID) *protobuf.TreeNod
 	return current
 }
 
+func (a *protoTreeAdapter) getAllMessageTypes() []string {
+	if a.tree == nil {
+		return []string{}
+	}
+
+	messageTypes := make(map[string]bool)
+	a.collectMessageTypes(a.tree, messageTypes)
+
+	result := make([]string, 0, len(messageTypes))
+	for msgType := range messageTypes {
+		if msgType != "root" && msgType != "" {
+			result = append(result, msgType)
+		}
+	}
+
+	return result
+}
+
+func (a *protoTreeAdapter) collectMessageTypes(node *protobuf.TreeNode, messageTypes map[string]bool) {
+	if node == nil {
+		return
+	}
+
+	if node.Type == "message" && len(node.Children) > 0 && node.Name != "root" {
+		messageTypes[node.Name] = true
+	}
+
+	for _, child := range node.Children {
+		a.collectMessageTypes(child, messageTypes)
+	}
+}
+
+func (a *protoTreeAdapter) countMessages(node *protobuf.TreeNode) int {
+	if node == nil {
+		return 0
+	}
+
+	count := 0
+	if node.Type == "message" && node.Name != "root" {
+		count = 1
+	}
+
+	for _, child := range node.Children {
+		count += a.countMessages(child)
+	}
+
+	return count
+}
+
+func (a *protoTreeAdapter) findMessageByName(name string) *protobuf.TreeNode {
+	if a.tree == nil {
+		return nil
+	}
+	return a.findMessageByNameRecursive(a.tree, name)
+}
+
+func (a *protoTreeAdapter) findMessageByNameRecursive(node *protobuf.TreeNode, name string) *protobuf.TreeNode {
+	if node == nil {
+		return nil
+	}
+
+	if node.Type == "message" && node.Name == name {
+		return node
+	}
+
+	for _, child := range node.Children {
+		if found := a.findMessageByNameRecursive(child, name); found != nil {
+			return found
+		}
+	}
+
+	return nil
+}
+
+func (a *protoTreeAdapter) copyMessageChildren(source *protobuf.TreeNode) []*protobuf.TreeNode {
+	if source == nil {
+		return make([]*protobuf.TreeNode, 0)
+	}
+
+	children := make([]*protobuf.TreeNode, 0, len(source.Children))
+	for _, child := range source.Children {
+		copied := &protobuf.TreeNode{
+			Name:       child.Name,
+			Type:       child.Type,
+			Value:      child.Value,
+			FieldNum:   child.FieldNum,
+			IsRepeated: child.IsRepeated,
+			Children:   a.copyMessageChildren(child),
+		}
+		children = append(children, copied)
+	}
+
+	return children
+}
+
 func splitUID(uid widget.TreeNodeID) []string {
 	parts := make([]string, 0)
 	current := ""
@@ -565,11 +726,13 @@ func createProtoTree(tree *protobuf.TreeNode) *widget.Tree {
 			Children: make([]*protobuf.TreeNode, 0),
 		})
 		treeWidget := widget.NewTree(adapter.ChildUIDs, adapter.IsBranch, adapter.CreateNode, adapter.UpdateNode)
+		adapter.SetTreeWidget(treeWidget)
 		return treeWidget
 	}
 
 	adapter := newProtoTreeAdapter(tree)
 	treeWidget := widget.NewTree(adapter.ChildUIDs, adapter.IsBranch, adapter.CreateNode, adapter.UpdateNode)
+	adapter.SetTreeWidget(treeWidget)
 
 	treeWidget.OpenBranch("root")
 

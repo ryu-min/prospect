@@ -123,7 +123,7 @@ func (p *Parser) parseProtocOutput(output string) (*TreeNode, error) {
 			fieldPart := strings.TrimSpace(strings.TrimSuffix(trimmedLine, "{"))
 			fieldNum := parseInt(fieldPart)
 			node := &TreeNode{
-				Name:       fmt.Sprintf("field_%d", fieldNum),
+				Name:       fmt.Sprintf("message_%d", fieldNum),
 				Type:       "message",
 				FieldNum:   fieldNum,
 				Children:   make([]*TreeNode, 0),
@@ -157,7 +157,28 @@ func (p *Parser) parseProtocOutput(output string) (*TreeNode, error) {
 		}
 	}
 
+	renumberMessages(root)
 	return root, nil
+}
+
+func renumberMessages(root *TreeNode) {
+	messageCounter := 1
+	renumberMessagesRecursive(root, &messageCounter)
+}
+
+func renumberMessagesRecursive(node *TreeNode, counter *int) {
+	if node == nil {
+		return
+	}
+
+	if node.Type == "message" && node.Name != "root" {
+		node.Name = fmt.Sprintf("message_%d", *counter)
+		*counter++
+	}
+
+	for _, child := range node.Children {
+		renumberMessagesRecursive(child, counter)
+	}
 }
 
 func getIndentLevel(line string) int {

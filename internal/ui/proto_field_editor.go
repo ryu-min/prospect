@@ -21,8 +21,9 @@ type protoFieldEditor struct {
 	availableTypes []string
 }
 
-func newProtoFieldEditor(uid widget.TreeNodeID, adapter *protoTreeAdapter) *protoFieldEditor {
+func newProtoFieldEditor(uid widget.TreeNodeID, adapter *protoTreeAdapter, messageTypes []string) *protoFieldEditor {
 	availableTypes := []string{"string", "number", "bool"}
+	availableTypes = append(availableTypes, messageTypes...)
 	ew := &protoFieldEditor{
 		uid:            uid,
 		adapter:        adapter,

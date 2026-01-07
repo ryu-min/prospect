@@ -279,17 +279,16 @@ func TestTreeToTextFormatWithNames_SimpleFields(t *testing.T) {
 	// Генерируем текстовый формат
 	textFormat := serializer.TreeToTextFormatWithNames(root)
 
-	// Проверяем наличие полей с именами
-	if !strings.Contains(textFormat, "field_1: \"Hello, World!\"") {
-		t.Errorf("Text format should contain field_1 with value, got:\n%s", textFormat)
+	if !strings.Contains(textFormat, "1: \"Hello, World!\"") {
+		t.Errorf("Text format should contain field 1 with value, got:\n%s", textFormat)
 	}
 
-	if !strings.Contains(textFormat, "field_2: 42") {
-		t.Errorf("Text format should contain field_2 with value, got:\n%s", textFormat)
+	if !strings.Contains(textFormat, "2: 42") {
+		t.Errorf("Text format should contain field 2 with value, got:\n%s", textFormat)
 	}
 
-	if !strings.Contains(textFormat, "field_3: true") {
-		t.Errorf("Text format should contain field_3 with value, got:\n%s", textFormat)
+	if !strings.Contains(textFormat, "3: true") {
+		t.Errorf("Text format should contain field 3 with value, got:\n%s", textFormat)
 	}
 
 	t.Logf("Generated text format:\n%s", textFormat)
@@ -343,13 +342,12 @@ func TestTreeToTextFormatWithNames_NestedMessage(t *testing.T) {
 	// Генерируем текстовый формат
 	textFormat := serializer.TreeToTextFormatWithNames(root)
 
-	// Проверяем наличие вложенного сообщения
-	if !strings.Contains(textFormat, "field_2 {") {
-		t.Errorf("Text format should contain field_2 message, got:\n%s", textFormat)
+	if !strings.Contains(textFormat, "2 {") {
+		t.Errorf("Text format should contain field 2 message, got:\n%s", textFormat)
 	}
 
-	if !strings.Contains(textFormat, "field_1: \"nested_value\"") {
-		t.Errorf("Text format should contain nested field_1, got:\n%s", textFormat)
+	if !strings.Contains(textFormat, "1: \"nested_value\"") {
+		t.Errorf("Text format should contain nested field 1, got:\n%s", textFormat)
 	}
 
 	t.Logf("Generated text format:\n%s", textFormat)
@@ -406,17 +404,16 @@ func TestTreeToTextFormatWithNames_RepeatedFields(t *testing.T) {
 	// Генерируем текстовый формат
 	textFormat := serializer.TreeToTextFormatWithNames(root)
 
-	// Проверяем, что все значения repeated поля присутствуют
-	if !strings.Contains(textFormat, "field_1: \"value1\"") {
-		t.Errorf("Text format should contain field_1: \"value1\", got:\n%s", textFormat)
+	if !strings.Contains(textFormat, "1: \"value1\"") {
+		t.Errorf("Text format should contain 1: \"value1\", got:\n%s", textFormat)
 	}
 
-	if !strings.Contains(textFormat, "field_1: \"value2\"") {
-		t.Errorf("Text format should contain field_1: \"value2\", got:\n%s", textFormat)
+	if !strings.Contains(textFormat, "1: \"value2\"") {
+		t.Errorf("Text format should contain 1: \"value2\", got:\n%s", textFormat)
 	}
 
-	if !strings.Contains(textFormat, "field_1: \"value3\"") {
-		t.Errorf("Text format should contain field_1: \"value3\", got:\n%s", textFormat)
+	if !strings.Contains(textFormat, "1: \"value3\"") {
+		t.Errorf("Text format should contain 1: \"value3\", got:\n%s", textFormat)
 	}
 
 	t.Logf("Generated text format:\n%s", textFormat)
@@ -712,4 +709,257 @@ func TestSerializeRaw_WithRepeatedFields(t *testing.T) {
 	}
 
 	t.Logf("Round trip with repeated fields successful: serialized %d bytes, found %d instances of field_1", len(binaryData), field1Count)
+}
+
+func TestGenerateProtoSchema_DuplicateMessageNames(t *testing.T) {
+	parser, err := NewParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	serializer := NewSerializer(parser.GetProtocPath())
+
+	root := &TreeNode{
+		Name:     "root",
+		Type:     "message",
+		FieldNum: 0,
+		Children: make([]*TreeNode, 0),
+	}
+
+	message1 := &TreeNode{
+		Name:     "message_1",
+		Type:     "message",
+		FieldNum: 1,
+		Children: make([]*TreeNode, 0),
+	}
+
+	child1 := &TreeNode{
+		Name:     "field_1",
+		Type:     "string",
+		FieldNum: 1,
+		Value:    "value1",
+		Children: make([]*TreeNode, 0),
+	}
+	message1.AddChild(child1)
+
+	child2 := &TreeNode{
+		Name:     "field_2",
+		Type:     "number",
+		FieldNum: 2,
+		Value:    "42",
+		Children: make([]*TreeNode, 0),
+	}
+	message1.AddChild(child2)
+
+	root.AddChild(message1)
+
+	message2 := &TreeNode{
+		Name:     "message_1",
+		Type:     "message",
+		FieldNum: 2,
+		Children: make([]*TreeNode, 0),
+	}
+
+	child3 := &TreeNode{
+		Name:     "field_1",
+		Type:     "string",
+		FieldNum: 1,
+		Value:    "value1",
+		Children: make([]*TreeNode, 0),
+	}
+	message2.AddChild(child3)
+
+	child4 := &TreeNode{
+		Name:     "field_2",
+		Type:     "number",
+		FieldNum: 2,
+		Value:    "42",
+		Children: make([]*TreeNode, 0),
+	}
+	message2.AddChild(child4)
+
+	root.AddChild(message2)
+
+	schema := serializer.GenerateProtoSchema(root)
+
+	if strings.Count(schema, "message Message1 {") != 1 {
+		t.Errorf("Expected exactly 1 definition of Message1, got %d occurrences", strings.Count(schema, "message Message1 {"))
+	}
+
+	if !strings.Contains(schema, "Message1 message_1 = 1;") {
+		t.Errorf("Schema should contain Message1 message_1 = 1, got:\n%s", schema)
+	}
+
+	if !strings.Contains(schema, "Message1 message_1_2 = 2;") {
+		t.Errorf("Schema should contain Message1 message_1_2 = 2, got:\n%s", schema)
+	}
+
+	t.Logf("Generated schema:\n%s", schema)
+}
+
+func TestRenumberMessages(t *testing.T) {
+	root := &TreeNode{
+		Name:     "root",
+		Type:     "message",
+		FieldNum: 0,
+		Children: make([]*TreeNode, 0),
+	}
+
+	message4 := &TreeNode{
+		Name:     "message_4",
+		Type:     "message",
+		FieldNum: 4,
+		Children: make([]*TreeNode, 0),
+	}
+
+	message7 := &TreeNode{
+		Name:     "message_7",
+		Type:     "message",
+		FieldNum: 7,
+		Children: make([]*TreeNode, 0),
+	}
+
+	root.AddChild(message4)
+	root.AddChild(message7)
+
+	renumberMessages(root)
+
+	if message4.Name != "message_1" {
+		t.Errorf("Expected message_4 to be renamed to message_1, got %s", message4.Name)
+	}
+
+	if message7.Name != "message_2" {
+		t.Errorf("Expected message_7 to be renamed to message_2, got %s", message7.Name)
+	}
+
+	if root.Name != "root" {
+		t.Errorf("Root name should not change, got %s", root.Name)
+	}
+}
+
+func TestRenumberMessages_Nested(t *testing.T) {
+	root := &TreeNode{
+		Name:     "root",
+		Type:     "message",
+		FieldNum: 0,
+		Children: make([]*TreeNode, 0),
+	}
+
+	message3 := &TreeNode{
+		Name:     "message_3",
+		Type:     "message",
+		FieldNum: 3,
+		Children: make([]*TreeNode, 0),
+	}
+
+	nestedMessage5 := &TreeNode{
+		Name:     "message_5",
+		Type:     "message",
+		FieldNum: 5,
+		Children: make([]*TreeNode, 0),
+	}
+
+	message3.AddChild(nestedMessage5)
+	root.AddChild(message3)
+
+	renumberMessages(root)
+
+	if message3.Name != "message_1" {
+		t.Errorf("Expected message_3 to be renamed to message_1, got %s", message3.Name)
+	}
+
+	if nestedMessage5.Name != "message_2" {
+		t.Errorf("Expected nested message_5 to be renamed to message_2, got %s", nestedMessage5.Name)
+	}
+}
+
+func TestGenerateProtoSchema_DuplicateMessageNames_ValidSchema(t *testing.T) {
+	parser, err := NewParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	serializer := NewSerializer(parser.GetProtocPath())
+
+	root := &TreeNode{
+		Name:     "root",
+		Type:     "message",
+		FieldNum: 0,
+		Children: make([]*TreeNode, 0),
+	}
+
+	message1 := &TreeNode{
+		Name:     "message_1",
+		Type:     "message",
+		FieldNum: 1,
+		Children: make([]*TreeNode, 0),
+	}
+
+	child1 := &TreeNode{
+		Name:     "field_1",
+		Type:     "string",
+		FieldNum: 1,
+		Value:    "test1",
+		Children: make([]*TreeNode, 0),
+	}
+	message1.AddChild(child1)
+
+	child2 := &TreeNode{
+		Name:     "field_2",
+		Type:     "number",
+		FieldNum: 2,
+		Value:    "42",
+		Children: make([]*TreeNode, 0),
+	}
+	message1.AddChild(child2)
+
+	root.AddChild(message1)
+
+	message2 := &TreeNode{
+		Name:     "message_1",
+		Type:     "message",
+		FieldNum: 2,
+		Children: make([]*TreeNode, 0),
+	}
+
+	child3 := &TreeNode{
+		Name:     "field_1",
+		Type:     "string",
+		FieldNum: 1,
+		Value:    "test2",
+		Children: make([]*TreeNode, 0),
+	}
+	message2.AddChild(child3)
+
+	child4 := &TreeNode{
+		Name:     "field_2",
+		Type:     "number",
+		FieldNum: 2,
+		Value:    "100",
+		Children: make([]*TreeNode, 0),
+	}
+	message2.AddChild(child4)
+
+	root.AddChild(message2)
+
+	schema := serializer.GenerateProtoSchema(root)
+
+	if strings.Count(schema, "message Message1 {") != 1 {
+		t.Errorf("Expected exactly 1 definition of Message1, got %d occurrences. Schema:\n%s", strings.Count(schema, "message Message1 {"), schema)
+	}
+
+	if !strings.Contains(schema, "Message1 message_1 = 1;") {
+		t.Errorf("Schema should contain Message1 message_1 = 1, got:\n%s", schema)
+	}
+
+	if !strings.Contains(schema, "Message1 message_1_2 = 2;") {
+		t.Errorf("Schema should contain Message1 message_1_2 = 2, got:\n%s", schema)
+	}
+
+	messageDefCount := strings.Count(schema, "message Message1 {")
+	if messageDefCount != 1 {
+		t.Errorf("Message1 should be defined exactly once, found %d definitions", messageDefCount)
+	}
+
+	t.Logf("Generated schema:\n%s", schema)
 }

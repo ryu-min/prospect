@@ -25,13 +25,16 @@ func (s *Serializer) SerializeRaw(tree *TreeNode) ([]byte, error) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	protoContent := s.GenerateProtoSchema(tree)
+	fieldNameMap := make(map[int]string)
+	messageCounter := 1
+	usedMessageNames := make(map[string]string)
+	protoContent := s.GenerateProtoSchemaWithFieldNames(tree, fieldNameMap, &messageCounter, usedMessageNames)
 	protoFile := filepath.Join(tempDir, "message.proto")
 	if err := os.WriteFile(protoFile, []byte(protoContent), 0644); err != nil {
 		return nil, fmt.Errorf("error writing proto file: %w", err)
 	}
 
-	textFormat := s.TreeToTextFormatWithNames(tree)
+	textFormat := s.TreeToTextFormatWithFieldNames(tree, fieldNameMap)
 
 	messageName := "Message"
 	cmd := exec.Command(s.protocPath, "--encode", messageName, "--proto_path", tempDir, protoFile)
@@ -126,18 +129,26 @@ func (s *Serializer) WriteNodeToTextFormat(builder *strings.Builder, node *TreeN
 }
 
 func (s *Serializer) GenerateProtoSchema(tree *TreeNode) string {
+	fieldNameMap := make(map[int]string)
+	messageCounter := 1
+	usedMessageNames := make(map[string]string)
+	return s.GenerateProtoSchemaWithFieldNames(tree, fieldNameMap, &messageCounter, usedMessageNames)
+}
+
+func (s *Serializer) GenerateProtoSchemaWithFieldNames(tree *TreeNode, fieldNameMap map[int]string, messageCounter *int, usedMessageNames map[string]string) string {
 	var builder strings.Builder
 	builder.WriteString("syntax = \"proto3\";\n\n")
 	builder.WriteString("message Message {\n")
 
 	fieldNum := 1
-	s.WriteProtoFields(&builder, tree, &fieldNum)
+	fieldNameCounter := make(map[string]int)
+	s.WriteProtoFields(&builder, tree, &fieldNum, messageCounter, usedMessageNames, fieldNameCounter, fieldNameMap)
 
 	builder.WriteString("}\n")
 	return builder.String()
 }
 
-func (s *Serializer) WriteProtoFields(builder *strings.Builder, node *TreeNode, fieldNum *int) {
+func (s *Serializer) WriteProtoFields(builder *strings.Builder, node *TreeNode, fieldNum *int, messageCounter *int, usedMessageNames map[string]string, fieldNameCounter map[string]int, fieldNameMap map[int]string) {
 	if node.Name == "root" {
 		fieldMap := make(map[int][]*TreeNode)
 		for _, child := range node.Children {
@@ -153,31 +164,52 @@ func (s *Serializer) WriteProtoFields(builder *strings.Builder, node *TreeNode, 
 
 			if len(fieldMap[child.FieldNum]) > 1 {
 				child.IsRepeated = true
-				s.WriteProtoField(builder, child, fieldNum)
+				s.WriteProtoField(builder, child, fieldNum, messageCounter, usedMessageNames, fieldNameCounter, fieldNameMap)
 			} else {
-				s.WriteProtoField(builder, child, fieldNum)
+				s.WriteProtoField(builder, child, fieldNum, messageCounter, usedMessageNames, fieldNameCounter, fieldNameMap)
 			}
 		}
 		return
 	}
 
-	s.WriteProtoField(builder, node, fieldNum)
+	s.WriteProtoField(builder, node, fieldNum, messageCounter, usedMessageNames, fieldNameCounter, fieldNameMap)
 }
 
-func (s *Serializer) WriteProtoField(builder *strings.Builder, node *TreeNode, fieldNum *int) {
+func (s *Serializer) WriteProtoField(builder *strings.Builder, node *TreeNode, fieldNum *int, messageCounter *int, usedMessageNames map[string]string, fieldNameCounter map[string]int, fieldNameMap map[int]string) {
 	indent := "  "
 
 	if node.Type == "message" || len(node.Children) > 0 {
-		messageName := fmt.Sprintf("Message%d", *fieldNum)
-		builder.WriteString(fmt.Sprintf("%s%s %s = %d;\n", indent, messageName, node.Name, node.FieldNum))
-
-		*fieldNum++
-		childFieldNum := 1
-		builder.WriteString(fmt.Sprintf("%smessage %s {\n", indent, messageName))
-		for _, child := range node.Children {
-			s.WriteProtoFieldRecursive(builder, child, &childFieldNum, indent+"  ")
+		var messageName string
+		alreadyDefined := false
+		if existingName, exists := usedMessageNames[node.Name]; exists {
+			messageName = existingName
+			alreadyDefined = true
+		} else {
+			messageName = fmt.Sprintf("Message%d", *messageCounter)
+			usedMessageNames[node.Name] = messageName
+			*messageCounter++
 		}
-		builder.WriteString(fmt.Sprintf("%s}\n", indent))
+
+		fieldName := node.Name
+		if node.Type == "message" {
+			fieldNameCounter[fieldName]++
+			if fieldNameCounter[fieldName] > 1 {
+				fieldName = fmt.Sprintf("%s_%d", fieldName, fieldNameCounter[fieldName])
+			}
+		}
+
+		fieldNameMap[node.FieldNum] = fieldName
+		builder.WriteString(fmt.Sprintf("%s%s %s = %d;\n", indent, messageName, fieldName, node.FieldNum))
+
+		if !alreadyDefined {
+			childFieldNum := 1
+			builder.WriteString(fmt.Sprintf("%smessage %s {\n", indent, messageName))
+			for _, child := range node.Children {
+				s.WriteProtoFieldRecursive(builder, child, &childFieldNum, indent+"  ", messageCounter, usedMessageNames)
+			}
+			builder.WriteString(fmt.Sprintf("%s}\n", indent))
+		}
+		*fieldNum++
 	} else {
 		protoType := s.MapTypeToProtoType(node.Type)
 		if node.IsRepeated {
@@ -185,21 +217,33 @@ func (s *Serializer) WriteProtoField(builder *strings.Builder, node *TreeNode, f
 		} else {
 			builder.WriteString(fmt.Sprintf("%s%s %s = %d;\n", indent, protoType, node.Name, node.FieldNum))
 		}
+		*fieldNum++
 	}
 }
 
-func (s *Serializer) WriteProtoFieldRecursive(builder *strings.Builder, node *TreeNode, fieldNum *int, indent string) {
+func (s *Serializer) WriteProtoFieldRecursive(builder *strings.Builder, node *TreeNode, fieldNum *int, indent string, messageCounter *int, usedMessageNames map[string]string) {
 	if node.Type == "message" || len(node.Children) > 0 {
-		messageName := fmt.Sprintf("Message%d", *fieldNum)
+		var messageName string
+		alreadyDefined := false
+		if existingName, exists := usedMessageNames[node.Name]; exists {
+			messageName = existingName
+			alreadyDefined = true
+		} else {
+			messageName = fmt.Sprintf("Message%d", *messageCounter)
+			usedMessageNames[node.Name] = messageName
+			*messageCounter++
+		}
 		builder.WriteString(fmt.Sprintf("%s%s %s = %d;\n", indent, messageName, node.Name, node.FieldNum))
 
-		*fieldNum++
-		childFieldNum := 1
-		builder.WriteString(fmt.Sprintf("%smessage %s {\n", indent, messageName))
-		for _, child := range node.Children {
-			s.WriteProtoFieldRecursive(builder, child, &childFieldNum, indent+"  ")
+		if !alreadyDefined {
+			childFieldNum := 1
+			builder.WriteString(fmt.Sprintf("%smessage %s {\n", indent, messageName))
+			for _, child := range node.Children {
+				s.WriteProtoFieldRecursive(builder, child, &childFieldNum, indent+"  ", messageCounter, usedMessageNames)
+			}
+			builder.WriteString(fmt.Sprintf("%s}\n", indent))
 		}
-		builder.WriteString(fmt.Sprintf("%s}\n", indent))
+		*fieldNum++
 	} else {
 		protoType := s.MapTypeToProtoType(node.Type)
 		if node.IsRepeated {
@@ -207,6 +251,7 @@ func (s *Serializer) WriteProtoFieldRecursive(builder *strings.Builder, node *Tr
 		} else {
 			builder.WriteString(fmt.Sprintf("%s%s %s = %d;\n", indent, protoType, node.Name, node.FieldNum))
 		}
+		*fieldNum++
 	}
 }
 
@@ -233,6 +278,16 @@ func (s *Serializer) TreeToTextFormatWithNames(node *TreeNode) string {
 	return result.String()
 }
 
+func (s *Serializer) TreeToTextFormatWithFieldNames(node *TreeNode, fieldNameMap map[int]string) string {
+	if node == nil {
+		return ""
+	}
+
+	var result strings.Builder
+	s.WriteNodeToTextFormatWithFieldNames(&result, node, 0, fieldNameMap)
+	return result.String()
+}
+
 func (s *Serializer) WriteNodeToTextFormatWithNames(builder *strings.Builder, node *TreeNode, indent int) {
 	if node.Name == "root" {
 		for _, child := range node.Children {
@@ -246,9 +301,79 @@ func (s *Serializer) WriteNodeToTextFormatWithNames(builder *strings.Builder, no
 	}
 
 	if node.Type == "message" || len(node.Children) > 0 {
-		builder.WriteString(fmt.Sprintf("%s {\n", node.Name))
+		builder.WriteString(fmt.Sprintf("%d {\n", node.FieldNum))
 		for _, child := range node.Children {
 			s.WriteNodeToTextFormatWithNames(builder, child, indent+1)
+		}
+		for i := 0; i < indent; i++ {
+			builder.WriteString("  ")
+		}
+		builder.WriteString("}\n")
+	} else {
+		builder.WriteString(fmt.Sprintf("%d: ", node.FieldNum))
+		if node.Value != nil {
+			if node.Type == "string" {
+				builder.WriteString(fmt.Sprintf("\"%s\"", fmt.Sprintf("%v", node.Value)))
+			} else if node.Type == "bool" {
+				if v, ok := node.Value.(bool); ok {
+					if v {
+						builder.WriteString("true")
+					} else {
+						builder.WriteString("false")
+					}
+				} else {
+					valueStr := fmt.Sprintf("%v", node.Value)
+					if valueStr == "true" || valueStr == "1" {
+						builder.WriteString("true")
+					} else {
+						builder.WriteString("false")
+					}
+				}
+			} else if node.Type == "number" {
+				builder.WriteString(fmt.Sprintf("%v", node.Value))
+			} else {
+				switch v := node.Value.(type) {
+				case string:
+					if isNumeric(v) {
+						builder.WriteString(v)
+					} else {
+						builder.WriteString(fmt.Sprintf("\"%s\"", v))
+					}
+				case bool:
+					if v {
+						builder.WriteString("true")
+					} else {
+						builder.WriteString("false")
+					}
+				default:
+					builder.WriteString(fmt.Sprintf("%v", v))
+				}
+			}
+		}
+		builder.WriteString("\n")
+	}
+}
+
+func (s *Serializer) WriteNodeToTextFormatWithFieldNames(builder *strings.Builder, node *TreeNode, indent int, fieldNameMap map[int]string) {
+	if node.Name == "root" {
+		for _, child := range node.Children {
+			s.WriteNodeToTextFormatWithFieldNames(builder, child, indent, fieldNameMap)
+		}
+		return
+	}
+
+	for i := 0; i < indent; i++ {
+		builder.WriteString("  ")
+	}
+
+	if node.Type == "message" || len(node.Children) > 0 {
+		fieldName, exists := fieldNameMap[node.FieldNum]
+		if !exists {
+			fieldName = node.Name
+		}
+		builder.WriteString(fmt.Sprintf("%s {\n", fieldName))
+		for _, child := range node.Children {
+			s.WriteNodeToTextFormatWithFieldNames(builder, child, indent+1, fieldNameMap)
 		}
 		for i := 0; i < indent; i++ {
 			builder.WriteString("  ")
