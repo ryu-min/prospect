@@ -67,8 +67,8 @@ func TestGenerateProtoSchema_SimpleFields(t *testing.T) {
 		t.Errorf("Schema should contain string field_1 = 1, got:\n%s", schema)
 	}
 
-	if !strings.Contains(schema, "int32 field_2 = 2;") {
-		t.Errorf("Schema should contain int32 field_2 = 2, got:\n%s", schema)
+	if !strings.Contains(schema, "int64 field_2 = 2;") {
+		t.Errorf("Schema should contain int64 field_2 = 2, got:\n%s", schema)
 	}
 
 	if !strings.Contains(schema, "bool field_3 = 3;") {
@@ -149,8 +149,8 @@ func TestGenerateProtoSchema_NestedMessage(t *testing.T) {
 		t.Errorf("Schema should contain nested string field_1 = 1, got:\n%s", schema)
 	}
 
-	if !strings.Contains(schema, "int32 field_2 = 2;") {
-		t.Errorf("Schema should contain nested int32 field_2 = 2, got:\n%s", schema)
+	if !strings.Contains(schema, "int64 field_2 = 2;") {
+		t.Errorf("Schema should contain nested int64 field_2 = 2, got:\n%s", schema)
 	}
 
 	t.Logf("Generated schema:\n%s", schema)
@@ -219,7 +219,7 @@ func TestMapTypeToProtoType(t *testing.T) {
 		expected string
 	}{
 		{"string", "string"},
-		{"number", "int32"},
+		{"number", "int64"},
 		{"bool", "bool"},
 		{"unknown", "string"}, // По умолчанию string
 	}

@@ -215,7 +215,7 @@ func (s *Serializer) MapTypeToProtoType(ourType string) string {
 	case "string":
 		return "string"
 	case "number":
-		return "int32"
+		return "int64"
 	case "bool":
 		return "bool"
 	default:

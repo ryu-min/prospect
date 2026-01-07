@@ -195,11 +195,12 @@ func (p *Parser) parseLine(line string) *TreeNode {
 		node.Type = "string"
 		node.Value = strings.Trim(valueStr, "\"")
 	} else if isNumeric(valueStr) {
+		normalizedValue := parseSignedNumber(valueStr)
 		node.Type = "number"
-		node.Value = valueStr
-		if valueStr == "0" || valueStr == "1" {
+		node.Value = normalizedValue
+		if normalizedValue == "0" || normalizedValue == "1" {
 			node.Type = "bool"
-			if valueStr == "1" {
+			if normalizedValue == "1" {
 				node.Value = true
 			} else {
 				node.Value = false
@@ -220,8 +221,30 @@ func parseInt(s string) int {
 }
 
 func isNumeric(s string) bool {
-	_, err := fmt.Sscanf(s, "%d", new(int))
+	var num int64
+	_, err := fmt.Sscanf(s, "%d", &num)
+	if err == nil {
+		return true
+	}
+	var unum uint64
+	_, err = fmt.Sscanf(s, "%d", &unum)
 	return err == nil
+}
+
+func parseSignedNumber(s string) string {
+	var unum uint64
+	_, err := fmt.Sscanf(s, "%d", &unum)
+	if err != nil {
+		return s
+	}
+	
+	const maxInt64 = uint64(1) << 63
+	if unum >= maxInt64 {
+		signedNum := int64(unum)
+		return fmt.Sprintf("%d", signedNum)
+	}
+	
+	return s
 }
 
 func (p *Parser) ApplySchema(tree *TreeNode, schemaPath string) (*TreeNode, error) {

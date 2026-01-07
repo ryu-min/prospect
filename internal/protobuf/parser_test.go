@@ -234,3 +234,78 @@ field_1: "value3"
 
 	t.Logf("Parsed repeated fields: found %d instances of field_1", field1Count)
 }
+
+func TestParseRaw_NegativeNumber(t *testing.T) {
+	protocPath := "protoc"
+	if _, err := exec.LookPath(protocPath); err != nil {
+		t.Skipf("Skipping test: protoc not found in PATH")
+		return
+	}
+
+	parser, err := NewParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	tempDir, err := os.MkdirTemp("", "prospect_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	protoContent := `syntax = "proto3";
+
+message TestMessage {
+  int64 field_1 = 1;
+}
+`
+	protoFile := filepath.Join(tempDir, "test.proto")
+	if err := os.WriteFile(protoFile, []byte(protoContent), 0644); err != nil {
+		t.Fatalf("Failed to write proto file: %v", err)
+	}
+
+	textFormat := `field_1: -30
+`
+
+	encodeCmd := exec.Command(protocPath, "--encode", "TestMessage", "--proto_path", tempDir, protoFile)
+	encodeCmd.Stdin = strings.NewReader(textFormat)
+	binaryData, err := encodeCmd.Output()
+	if err != nil {
+		if exitError, ok := err.(*exec.ExitError); ok {
+			t.Fatalf("Failed to encode test data: %v\nstderr: %s", err, string(exitError.Stderr))
+		}
+		t.Fatalf("Failed to encode test data: %v", err)
+	}
+
+	tree, err := parser.ParseRaw(binaryData)
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+
+	if tree == nil {
+		t.Fatal("Tree is nil")
+	}
+
+	var field1 *TreeNode
+	for _, child := range tree.Children {
+		if child.FieldNum == 1 {
+			field1 = child
+			break
+		}
+	}
+
+	if field1 == nil {
+		t.Fatal("field_1 not found")
+	}
+
+	if field1.Type != "number" {
+		t.Errorf("Expected field_1 type to be 'number', got '%s'", field1.Type)
+	}
+
+	expectedValue := "-30"
+	if field1.Value != expectedValue {
+		t.Errorf("Expected field_1 value to be '%s', got '%v'", expectedValue, field1.Value)
+	}
+
+	t.Logf("Successfully parsed negative number: field_1 = %v (type: %s)", field1.Value, field1.Type)
+}
