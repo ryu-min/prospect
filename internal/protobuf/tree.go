@@ -1,5 +1,7 @@
 package protobuf
 
+import "strings"
+
 type TreeNode struct {
 	Name       string
 	Type       string
@@ -23,5 +25,9 @@ func (n *TreeNode) AddChild(child *TreeNode) {
 }
 
 func (n *TreeNode) IsMessage() bool {
-	return len(n.Children) > 0 || n.Type == "message"
+	return len(n.Children) > 0 || isMessageType(n.Type)
+}
+
+func isMessageType(t string) bool {
+	return t == "message" || strings.HasPrefix(t, "message_")
 }

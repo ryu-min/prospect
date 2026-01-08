@@ -613,7 +613,7 @@ func TestSerializeRaw_WithNestedMessage(t *testing.T) {
 	// Ищем вложенное сообщение
 	var nestedMsg *TreeNode
 	for _, child := range parsedTree.Children {
-		if child.FieldNum == 2 && child.Type == "message" {
+		if child.FieldNum == 2 && strings.HasPrefix(child.Type, "message_") {
 			nestedMsg = child
 			break
 		}
@@ -806,14 +806,14 @@ func TestRenumberMessages(t *testing.T) {
 	}
 
 	message4 := &TreeNode{
-		Name:     "message_4",
+		Name:     "field_4",
 		Type:     "message",
 		FieldNum: 4,
 		Children: make([]*TreeNode, 0),
 	}
 
 	message7 := &TreeNode{
-		Name:     "message_7",
+		Name:     "field_7",
 		Type:     "message",
 		FieldNum: 7,
 		Children: make([]*TreeNode, 0),
@@ -824,12 +824,20 @@ func TestRenumberMessages(t *testing.T) {
 
 	renumberMessages(root)
 
-	if message4.Name != "message_1" {
-		t.Errorf("Expected message_4 to be renamed to message_1, got %s", message4.Name)
+	if message4.Name != "field_4" {
+		t.Errorf("Expected field_4 name to remain field_4, got %s", message4.Name)
 	}
 
-	if message7.Name != "message_2" {
-		t.Errorf("Expected message_7 to be renamed to message_2, got %s", message7.Name)
+	if message4.Type != "message_1" {
+		t.Errorf("Expected field_4 type to be message_1, got %s", message4.Type)
+	}
+
+	if message7.Name != "field_7" {
+		t.Errorf("Expected field_7 name to remain field_7, got %s", message7.Name)
+	}
+
+	if message7.Type != "message_2" {
+		t.Errorf("Expected field_7 type to be message_2, got %s", message7.Type)
 	}
 
 	if root.Name != "root" {
@@ -846,14 +854,14 @@ func TestRenumberMessages_Nested(t *testing.T) {
 	}
 
 	message3 := &TreeNode{
-		Name:     "message_3",
+		Name:     "field_3",
 		Type:     "message",
 		FieldNum: 3,
 		Children: make([]*TreeNode, 0),
 	}
 
 	nestedMessage5 := &TreeNode{
-		Name:     "message_5",
+		Name:     "field_5",
 		Type:     "message",
 		FieldNum: 5,
 		Children: make([]*TreeNode, 0),
@@ -864,12 +872,20 @@ func TestRenumberMessages_Nested(t *testing.T) {
 
 	renumberMessages(root)
 
-	if message3.Name != "message_1" {
-		t.Errorf("Expected message_3 to be renamed to message_1, got %s", message3.Name)
+	if message3.Name != "field_3" {
+		t.Errorf("Expected field_3 name to remain field_3, got %s", message3.Name)
 	}
 
-	if nestedMessage5.Name != "message_2" {
-		t.Errorf("Expected nested message_5 to be renamed to message_2, got %s", nestedMessage5.Name)
+	if message3.Type != "message_1" {
+		t.Errorf("Expected field_3 type to be message_1, got %s", message3.Type)
+	}
+
+	if nestedMessage5.Name != "field_5" {
+		t.Errorf("Expected nested field_5 name to remain field_5, got %s", nestedMessage5.Name)
+	}
+
+	if nestedMessage5.Type != "message_2" {
+		t.Errorf("Expected nested field_5 type to be message_2, got %s", nestedMessage5.Type)
 	}
 }
 

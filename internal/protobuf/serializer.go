@@ -74,7 +74,7 @@ func (s *Serializer) WriteNodeToTextFormat(builder *strings.Builder, node *TreeN
 		builder.WriteString("  ")
 	}
 
-	if node.Type == "message" || len(node.Children) > 0 {
+	if isMessageType(node.Type) || len(node.Children) > 0 {
 		builder.WriteString(fmt.Sprintf("%d {\n", node.FieldNum))
 		for _, child := range node.Children {
 			s.WriteNodeToTextFormat(builder, child, indent+1)
@@ -178,7 +178,7 @@ func (s *Serializer) WriteProtoFields(builder *strings.Builder, node *TreeNode, 
 func (s *Serializer) WriteProtoField(builder *strings.Builder, node *TreeNode, fieldNum *int, messageCounter *int, usedMessageNames map[string]string, fieldNameCounter map[string]int, fieldNameMap map[int]string) {
 	indent := "  "
 
-	if node.Type == "message" || len(node.Children) > 0 {
+	if isMessageType(node.Type) || len(node.Children) > 0 {
 		var messageName string
 		alreadyDefined := false
 		if existingName, exists := usedMessageNames[node.Name]; exists {
@@ -191,7 +191,7 @@ func (s *Serializer) WriteProtoField(builder *strings.Builder, node *TreeNode, f
 		}
 
 		fieldName := node.Name
-		if node.Type == "message" {
+		if isMessageType(node.Type) {
 			fieldNameCounter[fieldName]++
 			if fieldNameCounter[fieldName] > 1 {
 				fieldName = fmt.Sprintf("%s_%d", fieldName, fieldNameCounter[fieldName])
@@ -222,7 +222,7 @@ func (s *Serializer) WriteProtoField(builder *strings.Builder, node *TreeNode, f
 }
 
 func (s *Serializer) WriteProtoFieldRecursive(builder *strings.Builder, node *TreeNode, fieldNum *int, indent string, messageCounter *int, usedMessageNames map[string]string) {
-	if node.Type == "message" || len(node.Children) > 0 {
+	if isMessageType(node.Type) || len(node.Children) > 0 {
 		var messageName string
 		alreadyDefined := false
 		if existingName, exists := usedMessageNames[node.Name]; exists {
@@ -300,7 +300,7 @@ func (s *Serializer) WriteNodeToTextFormatWithNames(builder *strings.Builder, no
 		builder.WriteString("  ")
 	}
 
-	if node.Type == "message" || len(node.Children) > 0 {
+	if isMessageType(node.Type) || len(node.Children) > 0 {
 		builder.WriteString(fmt.Sprintf("%d {\n", node.FieldNum))
 		for _, child := range node.Children {
 			s.WriteNodeToTextFormatWithNames(builder, child, indent+1)
@@ -366,7 +366,7 @@ func (s *Serializer) WriteNodeToTextFormatWithFieldNames(builder *strings.Builde
 		builder.WriteString("  ")
 	}
 
-	if node.Type == "message" || len(node.Children) > 0 {
+	if isMessageType(node.Type) || len(node.Children) > 0 {
 		fieldName, exists := fieldNameMap[node.FieldNum]
 		if !exists {
 			fieldName = node.Name

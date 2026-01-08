@@ -123,7 +123,7 @@ func (p *Parser) parseProtocOutput(output string) (*TreeNode, error) {
 			fieldPart := strings.TrimSpace(strings.TrimSuffix(trimmedLine, "{"))
 			fieldNum := parseInt(fieldPart)
 			node := &TreeNode{
-				Name:       fmt.Sprintf("message_%d", fieldNum),
+				Name:       fmt.Sprintf("field_%d", fieldNum),
 				Type:       "message",
 				FieldNum:   fieldNum,
 				Children:   make([]*TreeNode, 0),
@@ -171,9 +171,8 @@ func renumberMessagesRecursive(node *TreeNode, counter *int) {
 		return
 	}
 
-	if node.Type == "message" && node.Name != "root" {
-		node.Name = fmt.Sprintf("message_%d", *counter)
-		node.Type = node.Name
+	if isMessageType(node.Type) && node.Name != "root" {
+		node.Type = fmt.Sprintf("message_%d", *counter)
 		*counter++
 	}
 

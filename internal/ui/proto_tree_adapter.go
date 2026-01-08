@@ -112,7 +112,7 @@ func (a *protoTreeAdapter) UpdateNode(uid widget.TreeNodeID, branch bool, obj fy
 
 		var nameText string
 		if a.isMessageType(node.Type) {
-			nameText = node.Type
+			nameText = node.Name
 		} else {
 			nameText = fmt.Sprintf("field_%d", node.FieldNum)
 		}
@@ -410,14 +410,18 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 		sourceMessage := a.findMessageByName(newType)
 		if sourceMessage != nil {
 			node.Type = newType
-			node.Name = newType
+			if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
+				node.Name = fmt.Sprintf("field_%d", node.FieldNum)
+			}
 			node.Value = nil
 			node.Children = a.copyMessageChildren(sourceMessage)
 		} else {
 			messageCounter := a.countMessages(a.tree)
 			messageName := fmt.Sprintf("message_%d", messageCounter+1)
 			node.Type = messageName
-			node.Name = messageName
+			if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
+				node.Name = fmt.Sprintf("field_%d", node.FieldNum)
+			}
 			node.Value = nil
 			node.Children = make([]*protobuf.TreeNode, 0)
 		}
@@ -432,14 +436,18 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 		sourceMessage := a.findMessageByName(newType)
 		if sourceMessage != nil {
 			node.Type = newType
-			node.Name = newType
+			if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
+				node.Name = fmt.Sprintf("field_%d", node.FieldNum)
+			}
 			node.Value = nil
 			node.Children = a.copyMessageChildren(sourceMessage)
 		} else {
 			messageCounter := a.countMessages(a.tree)
 			messageName := fmt.Sprintf("message_%d", messageCounter+1)
 			node.Type = messageName
-			node.Name = messageName
+			if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
+				node.Name = fmt.Sprintf("field_%d", node.FieldNum)
+			}
 			node.Value = nil
 			node.Children = make([]*protobuf.TreeNode, 0)
 		}
@@ -636,7 +644,7 @@ func (a *protoTreeAdapter) collectMessageTypes(node *protobuf.TreeNode, messageT
 	}
 
 	if a.isMessageType(node.Type) && len(node.Children) > 0 && node.Name != "root" {
-		messageTypes[node.Name] = true
+		messageTypes[node.Type] = true
 	}
 
 	for _, child := range node.Children {
@@ -673,7 +681,7 @@ func (a *protoTreeAdapter) findMessageByNameRecursive(node *protobuf.TreeNode, n
 		return nil
 	}
 
-	if a.isMessageType(node.Type) && node.Name == name {
+	if a.isMessageType(node.Type) && node.Type == name {
 		return node
 	}
 
