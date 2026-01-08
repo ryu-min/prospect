@@ -404,7 +404,31 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 	}
 
 	isMessageType := a.isMessageType(newType)
-	if isMessageType && !a.isMessageType(oldType) {
+	isOldMessageType := a.isMessageType(oldType)
+	
+	if isMessageType && !isOldMessageType {
+		sourceMessage := a.findMessageByName(newType)
+		if sourceMessage != nil {
+			node.Type = newType
+			node.Name = newType
+			node.Value = nil
+			node.Children = a.copyMessageChildren(sourceMessage)
+		} else {
+			messageCounter := a.countMessages(a.tree)
+			messageName := fmt.Sprintf("message_%d", messageCounter+1)
+			node.Type = messageName
+			node.Name = messageName
+			node.Value = nil
+			node.Children = make([]*protobuf.TreeNode, 0)
+		}
+		delete(a.editWidgets, uid)
+		if a.treeWidget != nil {
+			a.treeWidget.Refresh()
+		}
+		return
+	}
+	
+	if isMessageType && isOldMessageType {
 		sourceMessage := a.findMessageByName(newType)
 		if sourceMessage != nil {
 			node.Type = newType
