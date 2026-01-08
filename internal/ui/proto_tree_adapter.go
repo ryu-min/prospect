@@ -409,23 +409,31 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 	isOldMessageType := a.isMessageType(oldType)
 	
 	if isMessageType && !isOldMessageType {
-		sourceMessage := a.findMessageByName(newType)
-		if sourceMessage != nil {
+		if len(node.Children) > 0 {
 			node.Type = newType
 			if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
 				node.Name = fmt.Sprintf("field_%d", node.FieldNum)
 			}
 			node.Value = nil
-			node.Children = a.copyMessageChildren(sourceMessage)
 		} else {
-			messageCounter := a.countMessages(a.tree)
-			messageName := fmt.Sprintf("message_%d", messageCounter+1)
-			node.Type = messageName
-			if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
-				node.Name = fmt.Sprintf("field_%d", node.FieldNum)
+			sourceMessage := a.findMessageByName(newType)
+			if sourceMessage != nil {
+				node.Type = newType
+				if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
+					node.Name = fmt.Sprintf("field_%d", node.FieldNum)
+				}
+				node.Value = nil
+				node.Children = a.copyMessageChildren(sourceMessage)
+			} else {
+				messageCounter := a.countMessages(a.tree)
+				messageName := fmt.Sprintf("message_%d", messageCounter+1)
+				node.Type = messageName
+				if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
+					node.Name = fmt.Sprintf("field_%d", node.FieldNum)
+				}
+				node.Value = nil
+				node.Children = make([]*protobuf.TreeNode, 0)
 			}
-			node.Value = nil
-			node.Children = make([]*protobuf.TreeNode, 0)
 		}
 		delete(a.editWidgets, uid)
 		if a.treeWidget != nil {
@@ -435,23 +443,31 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 	}
 	
 	if isMessageType && isOldMessageType {
-		sourceMessage := a.findMessageByName(newType)
-		if sourceMessage != nil {
+		if len(node.Children) > 0 {
 			node.Type = newType
 			if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
 				node.Name = fmt.Sprintf("field_%d", node.FieldNum)
 			}
 			node.Value = nil
-			node.Children = a.copyMessageChildren(sourceMessage)
 		} else {
-			messageCounter := a.countMessages(a.tree)
-			messageName := fmt.Sprintf("message_%d", messageCounter+1)
-			node.Type = messageName
-			if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
-				node.Name = fmt.Sprintf("field_%d", node.FieldNum)
+			sourceMessage := a.findMessageByName(newType)
+			if sourceMessage != nil {
+				node.Type = newType
+				if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
+					node.Name = fmt.Sprintf("field_%d", node.FieldNum)
+				}
+				node.Value = nil
+				node.Children = a.copyMessageChildren(sourceMessage)
+			} else {
+				messageCounter := a.countMessages(a.tree)
+				messageName := fmt.Sprintf("message_%d", messageCounter+1)
+				node.Type = messageName
+				if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
+					node.Name = fmt.Sprintf("field_%d", node.FieldNum)
+				}
+				node.Value = nil
+				node.Children = make([]*protobuf.TreeNode, 0)
 			}
-			node.Value = nil
-			node.Children = make([]*protobuf.TreeNode, 0)
 		}
 		delete(a.editWidgets, uid)
 		if a.treeWidget != nil {
