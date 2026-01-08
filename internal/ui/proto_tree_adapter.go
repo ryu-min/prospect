@@ -151,10 +151,11 @@ func (a *protoTreeAdapter) UpdateNode(uid widget.TreeNodeID, branch bool, obj fy
 		}
 
 		if a.isMessageType(node.Type) {
-			editWidget.entry.Disable()
+			editWidget.SetEntryVisible(false)
 			editWidget.entry.SetText("")
 			editWidget.entry.OnChanged = nil
 		} else {
+			editWidget.SetEntryVisible(true)
 			editWidget.entry.Enable()
 			valueStr := a.nodeValueToString(node)
 
@@ -193,12 +194,13 @@ func (a *protoTreeAdapter) updateEntryValidation(uid widget.TreeNodeID, newType 
 	}
 
 	if a.isMessageType(newType) {
-		editWidget.entry.Disable()
+		editWidget.SetEntryVisible(false)
 		editWidget.entry.SetText("")
 		editWidget.entry.OnChanged = nil
 		return
 	}
 
+	editWidget.SetEntryVisible(true)
 	editWidget.entry.Enable()
 
 	node := a.getNodeByUID(uid)
