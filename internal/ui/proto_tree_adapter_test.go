@@ -247,3 +247,230 @@ func TestHandleTypeChangeFromMessageToMessageWithoutChildren(t *testing.T) {
 	}
 }
 
+func TestFindParentMessage(t *testing.T) {
+	root := &protobuf.TreeNode{
+		Name:     "root",
+		Type:     "message",
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message1 := &protobuf.TreeNode{
+		Name:     "field_1",
+		Type:     "message_1",
+		FieldNum: 1,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	field1 := &protobuf.TreeNode{
+		Name:     "field_1",
+		Type:     "string",
+		Value:    "test",
+		FieldNum: 1,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message1.Children = append(message1.Children, field1)
+	root.Children = append(root.Children, message1)
+
+	adapter := newProtoTreeAdapter(root)
+
+	parent := adapter.findParentMessage(field1)
+	if parent == nil {
+		t.Fatal("Expected to find parent message, got nil")
+	}
+
+	if parent != message1 {
+		t.Errorf("Expected parent to be message1, got %v", parent)
+	}
+
+	if parent.Type != "message_1" {
+		t.Errorf("Expected parent type to be 'message_1', got '%s'", parent.Type)
+	}
+}
+
+func TestFindFieldsWithSameFieldNumInMessageType(t *testing.T) {
+	root := &protobuf.TreeNode{
+		Name:     "root",
+		Type:     "message",
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message1 := &protobuf.TreeNode{
+		Name:     "field_1",
+		Type:     "message_1",
+		FieldNum: 1,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message2 := &protobuf.TreeNode{
+		Name:     "field_2",
+		Type:     "message_1",
+		FieldNum: 2,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	field1InMessage1 := &protobuf.TreeNode{
+		Name:     "field_5",
+		Type:     "string",
+		Value:    "value1",
+		FieldNum: 5,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	field1InMessage2 := &protobuf.TreeNode{
+		Name:     "field_5",
+		Type:     "string",
+		Value:    "value2",
+		FieldNum: 5,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message1.Children = append(message1.Children, field1InMessage1)
+	message2.Children = append(message2.Children, field1InMessage2)
+	root.Children = append(root.Children, message1, message2)
+
+	adapter := newProtoTreeAdapter(root)
+
+	affectedFields := adapter.findFieldsWithSameFieldNumInMessageType(field1InMessage1, "message_1", 5)
+	if len(affectedFields) != 1 {
+		t.Errorf("Expected 1 affected field, got %d", len(affectedFields))
+	}
+
+	if affectedFields[0] != field1InMessage2 {
+		t.Errorf("Expected affected field to be field1InMessage2, got %v", affectedFields[0])
+	}
+}
+
+func TestHandleTypeChangeWithFieldTypeSync(t *testing.T) {
+	dontAskFieldTypeSyncConfirmation = true
+	defer func() {
+		dontAskFieldTypeSyncConfirmation = false
+	}()
+
+	root := &protobuf.TreeNode{
+		Name:     "root",
+		Type:     "message",
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message1 := &protobuf.TreeNode{
+		Name:     "field_1",
+		Type:     "message_1",
+		FieldNum: 1,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message2 := &protobuf.TreeNode{
+		Name:     "field_2",
+		Type:     "message_1",
+		FieldNum: 2,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	field5InMessage1 := &protobuf.TreeNode{
+		Name:     "field_5",
+		Type:     "string",
+		Value:    "value1",
+		FieldNum: 5,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	field5InMessage2 := &protobuf.TreeNode{
+		Name:     "field_5",
+		Type:     "string",
+		Value:    "value2",
+		FieldNum: 5,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message1.Children = append(message1.Children, field5InMessage1)
+	message2.Children = append(message2.Children, field5InMessage2)
+	root.Children = append(root.Children, message1, message2)
+
+	adapter := newProtoTreeAdapter(root)
+
+	adapter.handleTypeChange("0:0", "string", "number")
+
+	if field5InMessage1.Type != "number" {
+		t.Errorf("Expected field5InMessage1 type to be 'number', got '%s'", field5InMessage1.Type)
+	}
+
+	if field5InMessage2.Type != "number" {
+		t.Errorf("Expected field5InMessage2 type to be 'number', got '%s'", field5InMessage2.Type)
+	}
+
+	if field5InMessage1.Value != nil {
+		t.Errorf("Expected field5InMessage1 value to be nil, got %v", field5InMessage1.Value)
+	}
+
+	if field5InMessage2.Value != nil {
+		t.Errorf("Expected field5InMessage2 value to be nil, got %v", field5InMessage2.Value)
+	}
+}
+
+func TestHandleTypeChangeWithSeamlessChangeAndFieldTypeSync(t *testing.T) {
+	dontAskFieldTypeSyncConfirmation = true
+	defer func() {
+		dontAskFieldTypeSyncConfirmation = false
+	}()
+
+	root := &protobuf.TreeNode{
+		Name:     "root",
+		Type:     "message",
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message1 := &protobuf.TreeNode{
+		Name:     "field_1",
+		Type:     "message_1",
+		FieldNum: 1,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message2 := &protobuf.TreeNode{
+		Name:     "field_2",
+		Type:     "message_1",
+		FieldNum: 2,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	field5InMessage1 := &protobuf.TreeNode{
+		Name:     "field_5",
+		Type:     "bool",
+		Value:    true,
+		FieldNum: 5,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	field5InMessage2 := &protobuf.TreeNode{
+		Name:     "field_5",
+		Type:     "bool",
+		Value:    false,
+		FieldNum: 5,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message1.Children = append(message1.Children, field5InMessage1)
+	message2.Children = append(message2.Children, field5InMessage2)
+	root.Children = append(root.Children, message1, message2)
+
+	adapter := newProtoTreeAdapter(root)
+
+	adapter.handleTypeChange("0:0", "bool", "number")
+
+	if field5InMessage1.Type != "number" {
+		t.Errorf("Expected field5InMessage1 type to be 'number', got '%s'", field5InMessage1.Type)
+	}
+
+	if field5InMessage2.Type != "number" {
+		t.Errorf("Expected field5InMessage2 type to be 'number', got '%s'", field5InMessage2.Type)
+	}
+
+	if field5InMessage1.Value != "1" {
+		t.Errorf("Expected field5InMessage1 value to be '1', got %v", field5InMessage1.Value)
+	}
+
+	if field5InMessage2.Value != "0" {
+		t.Errorf("Expected field5InMessage2 value to be '0', got %v", field5InMessage2.Value)
+	}
+}

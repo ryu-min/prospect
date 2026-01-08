@@ -14,6 +14,7 @@ import (
 )
 
 var dontAskTypeChangeConfirmation bool
+var dontAskFieldTypeSyncConfirmation bool
 
 type protoTreeAdapter struct {
 	tree        *protobuf.TreeNode
@@ -366,13 +367,13 @@ func (a *protoTreeAdapter) detectTypeChange(oldType string, valueStr string) (ne
 }
 
 func (a *protoTreeAdapter) showTypeChangeDialog(oldType, newType string, onConfirm func(), onCancel func()) {
-	if a.window == nil {
-		onCancel()
+	if dontAskTypeChangeConfirmation {
+		onConfirm()
 		return
 	}
 
-	if dontAskTypeChangeConfirmation {
-		onConfirm()
+	if a.window == nil {
+		onCancel()
 		return
 	}
 
@@ -407,7 +408,7 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 
 	isMessageType := a.isMessageType(newType)
 	isOldMessageType := a.isMessageType(oldType)
-	
+
 	if isMessageType && !isOldMessageType {
 		if len(node.Children) > 0 {
 			node.Type = newType
@@ -441,7 +442,7 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 		}
 		return
 	}
-	
+
 	if isMessageType && isOldMessageType {
 		if len(node.Children) > 0 {
 			node.Type = newType
@@ -485,6 +486,12 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 	}
 
 	if canSeamlessChange {
+		parentMessage := a.findParentMessage(node)
+		var affectedFields []*protobuf.TreeNode
+		if parentMessage != nil {
+			affectedFields = a.findFieldsWithSameFieldNumInMessageType(node, parentMessage.Type, node.FieldNum)
+		}
+
 		node.Type = newType
 		if oldType == "bool" && newType == "number" {
 			node.Value = valueStr
@@ -495,16 +502,79 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 				node.Value = false
 			}
 		}
+
+		for _, field := range affectedFields {
+			field.Type = newType
+			if oldType == "bool" && newType == "number" {
+				fieldValueStr := a.nodeValueToString(field)
+				field.Value = fieldValueStr
+			} else if oldType == "number" && newType == "bool" {
+				fieldValueStr := a.nodeValueToString(field)
+				if fieldValueStr == "1" {
+					field.Value = true
+				} else if fieldValueStr == "0" {
+					field.Value = false
+				}
+			}
+		}
+
 		if editWidget, ok := a.editWidgets[uid]; ok {
 			editWidget.typeCombo.SetSelected(newType)
 			newValueStr := a.nodeValueToString(node)
 			editWidget.entry.SetText(newValueStr)
 			a.updateEntryValidation(uid, newType)
 		}
+
+		if len(affectedFields) > 0 && a.treeWidget != nil {
+			a.treeWidget.Refresh()
+		}
 		return
 	}
 
 	oldValue := node.Value
+	parentMessage := a.findParentMessage(node)
+
+	if parentMessage != nil {
+		affectedFields := a.findFieldsWithSameFieldNumInMessageType(node, parentMessage.Type, node.FieldNum)
+		if len(affectedFields) > 0 {
+			a.showFieldTypeSyncDialog(
+				node.FieldNum,
+				oldType,
+				newType,
+				len(affectedFields),
+				func() {
+					node.Value = nil
+					node.Type = newType
+					if editWidget, ok := a.editWidgets[uid]; ok {
+						editWidget.entry.SetText("")
+						editWidget.typeCombo.SetSelected(newType)
+						a.updateEntryValidation(uid, newType)
+					}
+
+					for _, field := range affectedFields {
+						field.Value = nil
+						field.Type = newType
+					}
+
+					if a.treeWidget != nil {
+						a.treeWidget.Refresh()
+					}
+				},
+				func() {
+					node.Type = oldType
+					node.Value = oldValue
+					if editWidget, ok := a.editWidgets[uid]; ok {
+						valueStr := a.nodeValueToString(node)
+						editWidget.entry.SetText(valueStr)
+						editWidget.typeCombo.SetSelected(oldType)
+						a.updateEntryValidation(uid, oldType)
+					}
+				},
+			)
+			return
+		}
+	}
+
 	a.showTypeChangeDialog(
 		oldType,
 		newType,
@@ -756,6 +826,106 @@ func parseInt(s string) int {
 	var num int
 	fmt.Sscanf(s, "%d", &num)
 	return num
+}
+
+func (a *protoTreeAdapter) findParentMessage(node *protobuf.TreeNode) *protobuf.TreeNode {
+	if a.tree == nil || node == nil {
+		return nil
+	}
+
+	var findParent func(*protobuf.TreeNode, *protobuf.TreeNode) *protobuf.TreeNode
+	findParent = func(current *protobuf.TreeNode, target *protobuf.TreeNode) *protobuf.TreeNode {
+		if current == nil {
+			return nil
+		}
+
+		if current == target {
+			return nil
+		}
+
+		for _, child := range current.Children {
+			if child == target {
+				if a.isMessageType(current.Type) {
+					return current
+				}
+				parentMsg := findParent(a.tree, current)
+				if parentMsg != nil {
+					return parentMsg
+				}
+				return nil
+			}
+			if found := findParent(child, target); found != nil {
+				return found
+			}
+		}
+		return nil
+	}
+
+	return findParent(a.tree, node)
+}
+
+func (a *protoTreeAdapter) findFieldsWithSameFieldNumInMessageType(node *protobuf.TreeNode, messageType string, fieldNum int) []*protobuf.TreeNode {
+	if a.tree == nil || node == nil {
+		return []*protobuf.TreeNode{}
+	}
+
+	var result []*protobuf.TreeNode
+
+	var findFields func(*protobuf.TreeNode)
+	findFields = func(current *protobuf.TreeNode) {
+		if current == nil {
+			return
+		}
+
+		if a.isMessageType(current.Type) && current.Type == messageType {
+			for _, child := range current.Children {
+				if child.FieldNum == fieldNum && child != node {
+					result = append(result, child)
+				}
+			}
+		}
+
+		for _, child := range current.Children {
+			findFields(child)
+		}
+	}
+
+	findFields(a.tree)
+	return result
+}
+
+func (a *protoTreeAdapter) showFieldTypeSyncDialog(fieldNum int, oldType, newType string, affectedCount int, onConfirm func(), onCancel func()) {
+	if dontAskFieldTypeSyncConfirmation {
+		onConfirm()
+		return
+	}
+
+	if a.window == nil {
+		onCancel()
+		return
+	}
+
+	message := fmt.Sprintf("Changing field type from '%s' to '%s' for field_%d will also change the type in %d other field(s) with the same field number in messages of the same type.\n\nDo you want to continue?", oldType, newType, fieldNum, affectedCount)
+	label := widget.NewLabel(message)
+	label.Wrapping = fyne.TextWrapWord
+
+	checkbox := widget.NewCheck("Don't ask again", func(checked bool) {
+		dontAskFieldTypeSyncConfirmation = checked
+	})
+
+	content := container.NewVBox(
+		label,
+		checkbox,
+	)
+
+	confirmDialog := dialog.NewCustomConfirm("Field Type Synchronization", "Yes", "No", content, func(confirmed bool) {
+		if confirmed {
+			onConfirm()
+		} else {
+			onCancel()
+		}
+	}, a.window)
+	confirmDialog.Show()
 }
 
 func createProtoTree(tree *protobuf.TreeNode) *widget.Tree {
