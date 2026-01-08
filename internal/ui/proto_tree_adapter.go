@@ -119,22 +119,7 @@ func (a *protoTreeAdapter) UpdateNode(uid widget.TreeNodeID, branch bool, obj fy
 		}
 		editWidget.nameLabel.SetText(nameText)
 
-		messageTypes := a.getAllMessageTypes()
-		baseTypes := []string{"string", "number", "bool"}
-		allTypes := make([]string, 0, len(baseTypes)+len(messageTypes))
-		allTypes = append(allTypes, baseTypes...)
-		allTypes = append(allTypes, messageTypes...)
-
-		typeExists := false
-		for _, t := range allTypes {
-			if t == node.Type {
-				typeExists = true
-				break
-			}
-		}
-		if !typeExists && node.Type != "" {
-			allTypes = append(allTypes, node.Type)
-		}
+		allTypes := a.getAvailableTypesForNode(node)
 
 		editWidget.availableTypes = allTypes
 		editWidget.typeCombo.Options = allTypes
@@ -410,6 +395,92 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 	isOldMessageType := a.isMessageType(oldType)
 
 	if isMessageType && !isOldMessageType {
+		parentMessage := a.findParentMessage(node)
+
+		if parentMessage != nil {
+			affectedFields := a.findFieldsWithSameFieldNumInMessageType(node, parentMessage.Type, node.FieldNum)
+			if len(affectedFields) > 0 {
+				a.showFieldTypeSyncDialog(
+					node.FieldNum,
+					oldType,
+					newType,
+					len(affectedFields),
+					func() {
+						sourceMessage := a.findMessageByName(newType)
+						var finalMessageType string
+
+						if sourceMessage != nil {
+							finalMessageType = newType
+						} else {
+							messageCounter := a.countMessages(a.tree)
+							finalMessageType = fmt.Sprintf("message_%d", messageCounter+1)
+						}
+
+						if len(node.Children) > 0 {
+							node.Type = finalMessageType
+							if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
+								node.Name = fmt.Sprintf("field_%d", node.FieldNum)
+							}
+							node.Value = nil
+						} else {
+							if sourceMessage != nil {
+								node.Type = finalMessageType
+								if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
+									node.Name = fmt.Sprintf("field_%d", node.FieldNum)
+								}
+								node.Value = nil
+								node.Children = a.copyMessageChildren(sourceMessage)
+							} else {
+								node.Type = finalMessageType
+								if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
+									node.Name = fmt.Sprintf("field_%d", node.FieldNum)
+								}
+								node.Value = nil
+								node.Children = make([]*protobuf.TreeNode, 0)
+							}
+						}
+
+						for _, field := range affectedFields {
+							if len(field.Children) > 0 {
+								field.Type = finalMessageType
+								if field.Name == "" || !strings.HasPrefix(field.Name, "field_") {
+									field.Name = fmt.Sprintf("field_%d", field.FieldNum)
+								}
+								field.Value = nil
+							} else {
+								if sourceMessage != nil {
+									field.Type = finalMessageType
+									if field.Name == "" || !strings.HasPrefix(field.Name, "field_") {
+										field.Name = fmt.Sprintf("field_%d", field.FieldNum)
+									}
+									field.Value = nil
+									field.Children = a.copyMessageChildren(sourceMessage)
+								} else {
+									field.Type = finalMessageType
+									if field.Name == "" || !strings.HasPrefix(field.Name, "field_") {
+										field.Name = fmt.Sprintf("field_%d", field.FieldNum)
+									}
+									field.Value = nil
+									field.Children = make([]*protobuf.TreeNode, 0)
+								}
+							}
+						}
+
+						delete(a.editWidgets, uid)
+						if a.treeWidget != nil {
+							a.treeWidget.Refresh()
+						}
+					},
+					func() {
+						if editWidget, ok := a.editWidgets[uid]; ok {
+							editWidget.typeCombo.SetSelected(oldType)
+						}
+					},
+				)
+				return
+			}
+		}
+
 		if len(node.Children) > 0 {
 			node.Type = newType
 			if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
@@ -444,6 +515,92 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 	}
 
 	if isMessageType && isOldMessageType {
+		parentMessage := a.findParentMessage(node)
+
+		if parentMessage != nil {
+			affectedFields := a.findFieldsWithSameFieldNumInMessageType(node, parentMessage.Type, node.FieldNum)
+			if len(affectedFields) > 0 {
+				a.showFieldTypeSyncDialog(
+					node.FieldNum,
+					oldType,
+					newType,
+					len(affectedFields),
+					func() {
+						sourceMessage := a.findMessageByName(newType)
+						var finalMessageType string
+
+						if sourceMessage != nil {
+							finalMessageType = newType
+						} else {
+							messageCounter := a.countMessages(a.tree)
+							finalMessageType = fmt.Sprintf("message_%d", messageCounter+1)
+						}
+
+						if len(node.Children) > 0 {
+							node.Type = finalMessageType
+							if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
+								node.Name = fmt.Sprintf("field_%d", node.FieldNum)
+							}
+							node.Value = nil
+						} else {
+							if sourceMessage != nil {
+								node.Type = finalMessageType
+								if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
+									node.Name = fmt.Sprintf("field_%d", node.FieldNum)
+								}
+								node.Value = nil
+								node.Children = a.copyMessageChildren(sourceMessage)
+							} else {
+								node.Type = finalMessageType
+								if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
+									node.Name = fmt.Sprintf("field_%d", node.FieldNum)
+								}
+								node.Value = nil
+								node.Children = make([]*protobuf.TreeNode, 0)
+							}
+						}
+
+						for _, field := range affectedFields {
+							if len(field.Children) > 0 {
+								field.Type = finalMessageType
+								if field.Name == "" || !strings.HasPrefix(field.Name, "field_") {
+									field.Name = fmt.Sprintf("field_%d", field.FieldNum)
+								}
+								field.Value = nil
+							} else {
+								if sourceMessage != nil {
+									field.Type = finalMessageType
+									if field.Name == "" || !strings.HasPrefix(field.Name, "field_") {
+										field.Name = fmt.Sprintf("field_%d", field.FieldNum)
+									}
+									field.Value = nil
+									field.Children = a.copyMessageChildren(sourceMessage)
+								} else {
+									field.Type = finalMessageType
+									if field.Name == "" || !strings.HasPrefix(field.Name, "field_") {
+										field.Name = fmt.Sprintf("field_%d", field.FieldNum)
+									}
+									field.Value = nil
+									field.Children = make([]*protobuf.TreeNode, 0)
+								}
+							}
+						}
+
+						delete(a.editWidgets, uid)
+						if a.treeWidget != nil {
+							a.treeWidget.Refresh()
+						}
+					},
+					func() {
+						if editWidget, ok := a.editWidgets[uid]; ok {
+							editWidget.typeCombo.SetSelected(oldType)
+						}
+					},
+				)
+				return
+			}
+		}
+
 		if len(node.Children) > 0 {
 			node.Type = newType
 			if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
@@ -706,6 +863,38 @@ func (a *protoTreeAdapter) getNodeByUID(uid widget.TreeNodeID) *protobuf.TreeNod
 	}
 
 	return current
+}
+
+func (a *protoTreeAdapter) getAvailableTypesForNode(node *protobuf.TreeNode) []string {
+	messageTypes := a.getAllMessageTypes()
+	baseTypes := []string{"string", "number", "bool"}
+	allTypes := make([]string, 0, len(baseTypes)+len(messageTypes))
+	allTypes = append(allTypes, baseTypes...)
+
+	parentMessage := a.findParentMessage(node)
+	var excludedMessageType string
+	if parentMessage != nil {
+		excludedMessageType = parentMessage.Type
+	}
+
+	for _, msgType := range messageTypes {
+		if msgType != excludedMessageType {
+			allTypes = append(allTypes, msgType)
+		}
+	}
+
+	typeExists := false
+	for _, t := range allTypes {
+		if t == node.Type {
+			typeExists = true
+			break
+		}
+	}
+	if !typeExists && node.Type != "" {
+		allTypes = append(allTypes, node.Type)
+	}
+
+	return allTypes
 }
 
 func (a *protoTreeAdapter) getAllMessageTypes() []string {

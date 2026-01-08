@@ -474,3 +474,328 @@ func TestHandleTypeChangeWithSeamlessChangeAndFieldTypeSync(t *testing.T) {
 		t.Errorf("Expected field5InMessage2 value to be '0', got %v", field5InMessage2.Value)
 	}
 }
+
+func TestHandleTypeChangeToMessageWithFieldTypeSync(t *testing.T) {
+	dontAskFieldTypeSyncConfirmation = true
+	defer func() {
+		dontAskFieldTypeSyncConfirmation = false
+	}()
+
+	root := &protobuf.TreeNode{
+		Name:     "root",
+		Type:     "message",
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message1 := &protobuf.TreeNode{
+		Name:     "field_1",
+		Type:     "message_1",
+		FieldNum: 1,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message2 := &protobuf.TreeNode{
+		Name:     "field_2",
+		Type:     "message_1",
+		FieldNum: 2,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	field5InMessage1 := &protobuf.TreeNode{
+		Name:     "field_5",
+		Type:     "string",
+		Value:    "value1",
+		FieldNum: 5,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	field5InMessage2 := &protobuf.TreeNode{
+		Name:     "field_5",
+		Type:     "string",
+		Value:    "value2",
+		FieldNum: 5,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message1.Children = append(message1.Children, field5InMessage1)
+	message2.Children = append(message2.Children, field5InMessage2)
+	root.Children = append(root.Children, message1, message2)
+
+	adapter := newProtoTreeAdapter(root)
+
+	adapter.handleTypeChange("0:0", "string", "message_2")
+
+	if field5InMessage1.Type != field5InMessage2.Type {
+		t.Errorf("Expected both fields to have the same type, got '%s' and '%s'", field5InMessage1.Type, field5InMessage2.Type)
+	}
+
+	if !adapter.isMessageType(field5InMessage1.Type) {
+		t.Errorf("Expected field5InMessage1 type to be a message type, got '%s'", field5InMessage1.Type)
+	}
+
+	if !adapter.isMessageType(field5InMessage2.Type) {
+		t.Errorf("Expected field5InMessage2 type to be a message type, got '%s'", field5InMessage2.Type)
+	}
+
+	if field5InMessage1.Value != nil {
+		t.Errorf("Expected field5InMessage1 value to be nil, got %v", field5InMessage1.Value)
+	}
+
+	if field5InMessage2.Value != nil {
+		t.Errorf("Expected field5InMessage2 value to be nil, got %v", field5InMessage2.Value)
+	}
+}
+
+func TestHandleTypeChangeFromMessageToMessageWithFieldTypeSync(t *testing.T) {
+	dontAskFieldTypeSyncConfirmation = true
+	defer func() {
+		dontAskFieldTypeSyncConfirmation = false
+	}()
+
+	root := &protobuf.TreeNode{
+		Name:     "root",
+		Type:     "message",
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message1 := &protobuf.TreeNode{
+		Name:     "field_1",
+		Type:     "message_1",
+		FieldNum: 1,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message2 := &protobuf.TreeNode{
+		Name:     "field_2",
+		Type:     "message_1",
+		FieldNum: 2,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	field5InMessage1 := &protobuf.TreeNode{
+		Name:     "field_5",
+		Type:     "message_3",
+		FieldNum: 5,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	field5InMessage2 := &protobuf.TreeNode{
+		Name:     "field_5",
+		Type:     "message_3",
+		FieldNum: 5,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message1.Children = append(message1.Children, field5InMessage1)
+	message2.Children = append(message2.Children, field5InMessage2)
+	root.Children = append(root.Children, message1, message2)
+
+	adapter := newProtoTreeAdapter(root)
+
+	adapter.handleTypeChange("0:0", "message_3", "message_4")
+
+	if field5InMessage1.Type != field5InMessage2.Type {
+		t.Errorf("Expected both fields to have the same type, got '%s' and '%s'", field5InMessage1.Type, field5InMessage2.Type)
+	}
+
+	if !adapter.isMessageType(field5InMessage1.Type) {
+		t.Errorf("Expected field5InMessage1 type to be a message type, got '%s'", field5InMessage1.Type)
+	}
+
+	if !adapter.isMessageType(field5InMessage2.Type) {
+		t.Errorf("Expected field5InMessage2 type to be a message type, got '%s'", field5InMessage2.Type)
+	}
+}
+
+func TestGetAvailableTypesForNode_RecursiveTypeExcluded(t *testing.T) {
+	root := &protobuf.TreeNode{
+		Name:     "root",
+		Type:     "message",
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message1 := &protobuf.TreeNode{
+		Name:     "field_1",
+		Type:     "message_1",
+		FieldNum: 1,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message2 := &protobuf.TreeNode{
+		Name:     "field_2",
+		Type:     "message_2",
+		FieldNum: 2,
+		Children: []*protobuf.TreeNode{
+			{
+				Name:     "field_1",
+				Type:     "string",
+				Value:    "test",
+				FieldNum: 1,
+				Children: make([]*protobuf.TreeNode, 0),
+			},
+		},
+	}
+
+	field5InMessage1 := &protobuf.TreeNode{
+		Name:     "field_5",
+		Type:     "string",
+		Value:    "value1",
+		FieldNum: 5,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message1.Children = append(message1.Children, field5InMessage1)
+	root.Children = append(root.Children, message1, message2)
+
+	adapter := newProtoTreeAdapter(root)
+
+	availableTypes := adapter.getAvailableTypesForNode(field5InMessage1)
+
+	foundRecursiveType := false
+	for _, option := range availableTypes {
+		if option == "message_1" {
+			foundRecursiveType = true
+			break
+		}
+	}
+
+	if foundRecursiveType {
+		t.Error("Expected 'message_1' (parent message type) to be excluded from available types, but it was found")
+	}
+
+	foundNonRecursiveType := false
+	for _, option := range availableTypes {
+		if option == "message_2" {
+			foundNonRecursiveType = true
+			break
+		}
+	}
+
+	if !foundNonRecursiveType {
+		t.Error("Expected 'message_2' (non-recursive message type) to be present in available types, but it was not found")
+	}
+
+	foundBaseTypes := false
+	for _, option := range availableTypes {
+		if option == "string" || option == "number" || option == "bool" {
+			foundBaseTypes = true
+			break
+		}
+	}
+
+	if !foundBaseTypes {
+		t.Error("Expected base types (string, number, bool) to be present in available types, but they were not found")
+	}
+}
+
+func TestGetAvailableTypesForNode_RecursiveTypeExcludedInNestedMessage(t *testing.T) {
+	root := &protobuf.TreeNode{
+		Name:     "root",
+		Type:     "message",
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message1 := &protobuf.TreeNode{
+		Name:     "field_1",
+		Type:     "message_1",
+		FieldNum: 1,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	nestedMessage := &protobuf.TreeNode{
+		Name:     "field_2",
+		Type:     "message_2",
+		FieldNum: 2,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	field5InNestedMessage := &protobuf.TreeNode{
+		Name:     "field_5",
+		Type:     "string",
+		Value:    "value1",
+		FieldNum: 5,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	nestedMessage.Children = append(nestedMessage.Children, field5InNestedMessage)
+	message1.Children = append(message1.Children, nestedMessage)
+	root.Children = append(root.Children, message1)
+
+	adapter := newProtoTreeAdapter(root)
+
+	availableTypes := adapter.getAvailableTypesForNode(field5InNestedMessage)
+
+	foundRecursiveType := false
+	for _, option := range availableTypes {
+		if option == "message_2" {
+			foundRecursiveType = true
+			break
+		}
+	}
+
+	if foundRecursiveType {
+		t.Error("Expected 'message_2' (parent message type) to be excluded from available types, but it was found")
+	}
+
+	foundNonRecursiveType := false
+	for _, option := range availableTypes {
+		if option == "message_1" {
+			foundNonRecursiveType = true
+			break
+		}
+	}
+
+	if !foundNonRecursiveType {
+		t.Error("Expected 'message_1' (non-recursive message type) to be present in available types, but it was not found")
+	}
+}
+
+func TestGetAvailableTypesForNode_CurrentTypeStillAvailableEvenIfRecursive(t *testing.T) {
+	root := &protobuf.TreeNode{
+		Name:     "root",
+		Type:     "message",
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message1 := &protobuf.TreeNode{
+		Name:     "field_1",
+		Type:     "message_1",
+		FieldNum: 1,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	field5InMessage1 := &protobuf.TreeNode{
+		Name:     "field_5",
+		Type:     "message_1",
+		Value:    nil,
+		FieldNum: 5,
+		Children: []*protobuf.TreeNode{
+			{
+				Name:     "field_1",
+				Type:     "string",
+				Value:    "nested",
+				FieldNum: 1,
+				Children: make([]*protobuf.TreeNode, 0),
+			},
+		},
+	}
+
+	message1.Children = append(message1.Children, field5InMessage1)
+	root.Children = append(root.Children, message1)
+
+	adapter := newProtoTreeAdapter(root)
+
+	availableTypes := adapter.getAvailableTypesForNode(field5InMessage1)
+
+	foundCurrentType := false
+	for _, option := range availableTypes {
+		if option == "message_1" {
+			foundCurrentType = true
+			break
+		}
+	}
+
+	if !foundCurrentType {
+		t.Error("Expected current type 'message_1' to be present in available types (even though it's recursive), but it was not found")
+	}
+}
