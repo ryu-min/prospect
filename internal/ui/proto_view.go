@@ -220,6 +220,8 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 
 			if browserTabs != nil {
 				browserTabs.SetTabFilePath(currentFilePath)
+				fileName := filepath.Base(currentFilePath)
+				browserTabs.UpdateTabTitle(fileName)
 			}
 
 			dialogState.setLastSaveDir(writer.URI())
