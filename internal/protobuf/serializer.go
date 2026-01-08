@@ -137,7 +137,7 @@ func (s *Serializer) GenerateProtoSchema(tree *TreeNode) string {
 
 func (s *Serializer) GenerateProtoSchemaWithFieldNames(tree *TreeNode, fieldNameMap map[int]string, messageCounter *int, usedMessageNames map[string]string) string {
 	var builder strings.Builder
-	builder.WriteString("syntax = \"proto3\";\n\n")
+	builder.WriteString("syntax = \"proto2\";\n\n")
 	builder.WriteString("message Message {\n")
 
 	fieldNum := 1
@@ -199,7 +199,7 @@ func (s *Serializer) WriteProtoField(builder *strings.Builder, node *TreeNode, f
 		}
 
 		fieldNameMap[node.FieldNum] = fieldName
-		builder.WriteString(fmt.Sprintf("%s%s %s = %d;\n", indent, messageName, fieldName, node.FieldNum))
+		builder.WriteString(fmt.Sprintf("%soptional %s %s = %d;\n", indent, messageName, fieldName, node.FieldNum))
 
 		if !alreadyDefined {
 			childFieldNum := 1
@@ -215,7 +215,7 @@ func (s *Serializer) WriteProtoField(builder *strings.Builder, node *TreeNode, f
 		if node.IsRepeated {
 			builder.WriteString(fmt.Sprintf("%srepeated %s %s = %d;\n", indent, protoType, node.Name, node.FieldNum))
 		} else {
-			builder.WriteString(fmt.Sprintf("%s%s %s = %d;\n", indent, protoType, node.Name, node.FieldNum))
+			builder.WriteString(fmt.Sprintf("%soptional %s %s = %d;\n", indent, protoType, node.Name, node.FieldNum))
 		}
 		*fieldNum++
 	}
@@ -233,7 +233,7 @@ func (s *Serializer) WriteProtoFieldRecursive(builder *strings.Builder, node *Tr
 			usedMessageNames[node.Name] = messageName
 			*messageCounter++
 		}
-		builder.WriteString(fmt.Sprintf("%s%s %s = %d;\n", indent, messageName, node.Name, node.FieldNum))
+		builder.WriteString(fmt.Sprintf("%soptional %s %s = %d;\n", indent, messageName, node.Name, node.FieldNum))
 
 		if !alreadyDefined {
 			childFieldNum := 1
@@ -249,7 +249,7 @@ func (s *Serializer) WriteProtoFieldRecursive(builder *strings.Builder, node *Tr
 		if node.IsRepeated {
 			builder.WriteString(fmt.Sprintf("%srepeated %s %s = %d;\n", indent, protoType, node.Name, node.FieldNum))
 		} else {
-			builder.WriteString(fmt.Sprintf("%s%s %s = %d;\n", indent, protoType, node.Name, node.FieldNum))
+			builder.WriteString(fmt.Sprintf("%soptional %s %s = %d;\n", indent, protoType, node.Name, node.FieldNum))
 		}
 		*fieldNum++
 	}

@@ -54,7 +54,7 @@ func TestGenerateProtoSchema_SimpleFields(t *testing.T) {
 	schema := serializer.GenerateProtoSchema(root)
 
 	// Проверяем базовую структуру
-	if !strings.Contains(schema, "syntax = \"proto3\";") {
+	if !strings.Contains(schema, "syntax = \"proto2\";") {
 		t.Error("Schema should contain syntax declaration")
 	}
 
@@ -63,16 +63,16 @@ func TestGenerateProtoSchema_SimpleFields(t *testing.T) {
 	}
 
 	// Проверяем наличие полей
-	if !strings.Contains(schema, "string field_1 = 1;") {
-		t.Errorf("Schema should contain string field_1 = 1, got:\n%s", schema)
+	if !strings.Contains(schema, "optional string field_1 = 1;") {
+		t.Errorf("Schema should contain optional string field_1 = 1, got:\n%s", schema)
 	}
 
-	if !strings.Contains(schema, "int64 field_2 = 2;") {
-		t.Errorf("Schema should contain int64 field_2 = 2, got:\n%s", schema)
+	if !strings.Contains(schema, "optional int64 field_2 = 2;") {
+		t.Errorf("Schema should contain optional int64 field_2 = 2, got:\n%s", schema)
 	}
 
-	if !strings.Contains(schema, "bool field_3 = 3;") {
-		t.Errorf("Schema should contain bool field_3 = 3, got:\n%s", schema)
+	if !strings.Contains(schema, "optional bool field_3 = 3;") {
+		t.Errorf("Schema should contain optional bool field_3 = 3, got:\n%s", schema)
 	}
 
 	t.Logf("Generated schema:\n%s", schema)
@@ -978,4 +978,104 @@ func TestGenerateProtoSchema_DuplicateMessageNames_ValidSchema(t *testing.T) {
 	}
 
 	t.Logf("Generated schema:\n%s", schema)
+}
+
+func TestSerializeRaw_BoolFalseValuePreserved(t *testing.T) {
+	protocPath := "protoc"
+	if _, err := exec.LookPath(protocPath); err != nil {
+		t.Skipf("Skipping test: protoc not found in PATH")
+		return
+	}
+
+	parser, err := NewParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	serializer := NewSerializer(parser.GetProtocPath())
+
+	root := &TreeNode{
+		Name:     "root",
+		Type:     "message",
+		FieldNum: 0,
+		Children: make([]*TreeNode, 0),
+	}
+
+	boolFieldFalse := &TreeNode{
+		Name:     "field_1",
+		Type:     "bool",
+		FieldNum: 1,
+		Value:    false,
+		Children: make([]*TreeNode, 0),
+	}
+	root.AddChild(boolFieldFalse)
+
+	boolFieldTrue := &TreeNode{
+		Name:     "field_2",
+		Type:     "bool",
+		FieldNum: 2,
+		Value:    true,
+		Children: make([]*TreeNode, 0),
+	}
+	root.AddChild(boolFieldTrue)
+
+	binaryData, err := serializer.SerializeRaw(root)
+	if err != nil {
+		t.Fatalf("Failed to serialize tree: %v", err)
+	}
+
+	if len(binaryData) == 0 {
+		t.Fatal("Serialized data is empty")
+	}
+
+	parsedTree, err := parser.ParseRaw(binaryData)
+	if err != nil {
+		t.Fatalf("Failed to parse serialized data: %v", err)
+	}
+
+	if parsedTree == nil {
+		t.Fatal("Parsed tree is nil")
+	}
+
+	var foundField1 bool
+	var foundField2 bool
+	var field1Value interface{}
+	var field2Value interface{}
+
+	for _, child := range parsedTree.Children {
+		if child.FieldNum == 1 {
+			foundField1 = true
+			field1Value = child.Value
+			if child.Type != "bool" {
+				t.Errorf("Expected field_1 type to be 'bool', got '%s'", child.Type)
+			}
+		}
+		if child.FieldNum == 2 {
+			foundField2 = true
+			field2Value = child.Value
+			if child.Type != "bool" {
+				t.Errorf("Expected field_2 type to be 'bool', got '%s'", child.Type)
+			}
+		}
+	}
+
+	if !foundField1 {
+		t.Error("field_1 with bool value false was lost after serialization/deserialization")
+	}
+
+	if !foundField2 {
+		t.Error("field_2 with bool value true was lost after serialization/deserialization")
+	}
+
+	if foundField1 {
+		if field1Value != false {
+			t.Errorf("Expected field_1 value to be false, got %v (type: %T)", field1Value, field1Value)
+		}
+	}
+
+	if foundField2 {
+		if field2Value != true {
+			t.Errorf("Expected field_2 value to be true, got %v (type: %T)", field2Value, field2Value)
+		}
+	}
 }
