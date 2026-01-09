@@ -868,3 +868,125 @@ func TestValidateValue_Float(t *testing.T) {
 		}
 	}
 }
+
+func TestHandleTypeChangeFromMessageToStandardType_ClearsChildren(t *testing.T) {
+	root := &protobuf.TreeNode{
+		Name:     "root",
+		Type:     "message",
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	child1 := &protobuf.TreeNode{
+		Name:     "field_1",
+		Type:     "string",
+		Value:    "test",
+		FieldNum: 1,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	child2 := &protobuf.TreeNode{
+		Name:     "field_2",
+		Type:     "int64",
+		Value:    "42",
+		FieldNum: 2,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	messageNode := &protobuf.TreeNode{
+		Name:     "field_3",
+		Type:     "message_1",
+		FieldNum: 3,
+		Children: []*protobuf.TreeNode{child1, child2},
+	}
+
+	root.Children = append(root.Children, messageNode)
+
+	adapter := newProtoTreeAdapter(root)
+
+	adapter.handleTypeChange("0", "message_1", "string")
+
+	if messageNode.Type != "string" {
+		t.Errorf("Expected type to be 'string', got '%s'", messageNode.Type)
+	}
+
+	if len(messageNode.Children) != 0 {
+		t.Errorf("Expected children to be cleared, got %d children", len(messageNode.Children))
+	}
+
+	if messageNode.Value != nil {
+		t.Errorf("Expected value to be nil, got %v", messageNode.Value)
+	}
+}
+
+func TestHandleTypeChangeFromMessageToStandardType_WithFieldSync_ClearsChildren(t *testing.T) {
+	root := &protobuf.TreeNode{
+		Name:     "root",
+		Type:     "message",
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	message1 := &protobuf.TreeNode{
+		Name:     "message_1",
+		Type:     "message",
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	child1 := &protobuf.TreeNode{
+		Name:     "field_1",
+		Type:     "string",
+		Value:    "test",
+		FieldNum: 1,
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	field3InMessage1 := &protobuf.TreeNode{
+		Name:     "field_3",
+		Type:     "message_2",
+		FieldNum: 3,
+		Children: []*protobuf.TreeNode{child1},
+	}
+
+	message1.Children = append(message1.Children, field3InMessage1)
+
+	message2 := &protobuf.TreeNode{
+		Name:     "message_2",
+		Type:     "message",
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+
+	field3InMessage2 := &protobuf.TreeNode{
+		Name:     "field_3",
+		Type:     "message_2",
+		FieldNum: 3,
+		Children: []*protobuf.TreeNode{child1},
+	}
+
+	message2.Children = append(message2.Children, field3InMessage2)
+
+	root.Children = append(root.Children, message1, message2)
+
+	adapter := newProtoTreeAdapter(root)
+
+	dontAskFieldTypeSyncConfirmation = true
+	defer func() {
+		dontAskFieldTypeSyncConfirmation = false
+	}()
+
+	adapter.handleTypeChange("0:0", "message_2", "string")
+
+	if field3InMessage1.Type != "string" {
+		t.Errorf("Expected field3InMessage1 type to be 'string', got '%s'", field3InMessage1.Type)
+	}
+
+	if len(field3InMessage1.Children) != 0 {
+		t.Errorf("Expected field3InMessage1 children to be cleared, got %d children", len(field3InMessage1.Children))
+	}
+
+	if field3InMessage2.Type != "string" {
+		t.Errorf("Expected field3InMessage2 type to be 'string', got '%s'", field3InMessage2.Type)
+	}
+
+	if len(field3InMessage2.Children) != 0 {
+		t.Errorf("Expected field3InMessage2 children to be cleared, got %d children", len(field3InMessage2.Children))
+	}
+}
