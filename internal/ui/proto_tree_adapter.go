@@ -246,7 +246,30 @@ func (a *protoTreeAdapter) validateValue(value string, fieldType string) bool {
 	switch fieldType {
 	case "string":
 		return true
-	case "number":
+	case "int32", "int64", "sint32", "sint64":
+		if value == "-" {
+			return true
+		}
+		trimmed := strings.TrimSpace(value)
+		_, err := strconv.ParseInt(trimmed, 10, 64)
+		if err != nil {
+			if trimmed == "-" {
+				return true
+			}
+			return false
+		}
+		return true
+	case "uint32", "uint64":
+		trimmed := strings.TrimSpace(value)
+		_, err := strconv.ParseUint(trimmed, 10, 64)
+		if err != nil {
+			return false
+		}
+		return true
+	case "float", "double":
+		if value == "" {
+			return true
+		}
 		if value == "-" {
 			return true
 		}
@@ -257,18 +280,18 @@ func (a *protoTreeAdapter) validateValue(value string, fieldType string) bool {
 			return true
 		}
 		trimmed := strings.TrimSpace(value)
+		if trimmed == "-" || trimmed == "." || trimmed == "-." {
+			return true
+		}
 		if strings.HasSuffix(trimmed, ".") {
 			trimmed = strings.TrimSuffix(trimmed, ".")
-		}
-		_, err := strconv.ParseInt(trimmed, 10, 64)
-		if err != nil {
-			_, err = strconv.ParseFloat(trimmed, 64)
-			if err != nil {
-				if trimmed == "-" || strings.HasSuffix(value, ".") {
-					return true
-				}
-				return false
+			if trimmed == "" || trimmed == "-" {
+				return true
 			}
+		}
+		_, err := strconv.ParseFloat(trimmed, 64)
+		if err != nil {
+			return false
 		}
 		return true
 	case "bool":
@@ -292,45 +315,68 @@ func (a *protoTreeAdapter) detectTypeChange(oldType string, valueStr string) (ne
 		}
 	}
 
-	if oldType == "number" {
-		if trimmed == "0" || trimmed == "1" {
-			return "number", false
+	if oldType == "int32" || oldType == "int64" || oldType == "sint32" || oldType == "sint64" {
+		if trimmed == "-" {
+			return oldType, false
+		}
+		_, err := strconv.ParseInt(trimmed, 10, 64)
+		if err == nil {
+			return oldType, false
 		}
 		if trimmed == "-" || trimmed == "." || trimmed == "-." {
 			return oldType, false
 		}
-		trimmedForNumber := trimmed
-		if strings.HasSuffix(trimmedForNumber, ".") {
-			trimmedForNumber = strings.TrimSuffix(trimmedForNumber, ".")
+		trimmedForFloat := trimmed
+		if strings.HasSuffix(trimmedForFloat, ".") {
+			trimmedForFloat = strings.TrimSuffix(trimmedForFloat, ".")
 		}
-		_, errInt := strconv.ParseInt(trimmedForNumber, 10, 64)
-		_, errFloat := strconv.ParseFloat(trimmedForNumber, 64)
-		if errInt == nil || errFloat == nil {
-			return "number", false
+		_, errFloat := strconv.ParseFloat(trimmedForFloat, 64)
+		if errFloat == nil {
+			return "float", true
 		}
-		if oldType != "string" {
-			return "string", true
+		return "string", true
+	}
+
+	if oldType == "uint32" || oldType == "uint64" {
+		_, err := strconv.ParseUint(trimmed, 10, 64)
+		if err == nil {
+			return oldType, false
 		}
-		return "string", false
+		if trimmed == "." || trimmed == "-." {
+			return oldType, false
+		}
+		trimmedForFloat := trimmed
+		if strings.HasSuffix(trimmedForFloat, ".") {
+			trimmedForFloat = strings.TrimSuffix(trimmedForFloat, ".")
+		}
+		_, errFloat := strconv.ParseFloat(trimmedForFloat, 64)
+		if errFloat == nil {
+			return "float", true
+		}
+		return "string", true
+	}
+
+	if oldType == "float" || oldType == "double" {
+		if trimmed == "-" || trimmed == "." || trimmed == "-." {
+			return oldType, false
+		}
+		trimmedForFloat := trimmed
+		if strings.HasSuffix(trimmedForFloat, ".") {
+			trimmedForFloat = strings.TrimSuffix(trimmedForFloat, ".")
+		}
+		_, errFloat := strconv.ParseFloat(trimmedForFloat, 64)
+		if errFloat == nil {
+			return oldType, false
+		}
+		_, errInt := strconv.ParseInt(trimmed, 10, 64)
+		if errInt == nil {
+			return "int32", true
+		}
+		return "string", true
 	}
 
 	if oldType == "string" {
-		if trimmed == "0" || trimmed == "1" {
-			return "bool", true
-		}
-		if trimmed == "-" || trimmed == "." || trimmed == "-." {
-			return oldType, false
-		}
-		trimmedForNumber := trimmed
-		if strings.HasSuffix(trimmedForNumber, ".") {
-			trimmedForNumber = strings.TrimSuffix(trimmedForNumber, ".")
-		}
-		_, errInt := strconv.ParseInt(trimmedForNumber, 10, 64)
-		_, errFloat := strconv.ParseFloat(trimmedForNumber, 64)
-		if errInt == nil || errFloat == nil {
-			return "number", true
-		}
-		return "string", false
+		return oldType, false
 	}
 
 	if trimmed == "0" || trimmed == "1" {
@@ -345,8 +391,11 @@ func (a *protoTreeAdapter) detectTypeChange(oldType string, valueStr string) (ne
 	}
 	_, errInt := strconv.ParseInt(trimmedForNumber, 10, 64)
 	_, errFloat := strconv.ParseFloat(trimmedForNumber, 64)
-	if errInt == nil || errFloat == nil {
-		return "number", oldType != "number"
+	if errInt == nil {
+		return "int32", oldType != "int32" && oldType != "int64" && oldType != "sint32" && oldType != "sint64" && oldType != "uint32" && oldType != "uint64"
+	}
+	if errFloat == nil {
+		return "float", oldType != "float" && oldType != "double"
 	}
 	return "string", oldType != "string"
 }
@@ -636,7 +685,15 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 
 	canSeamlessChange := false
 	valueStr := a.nodeValueToString(node)
-	if (oldType == "bool" && newType == "number") || (oldType == "number" && newType == "bool") {
+	isIntegerType := func(t string) bool {
+		return t == "int32" || t == "int64" || t == "uint32" || t == "uint64" || t == "sint32" || t == "sint64"
+	}
+	isFloatType := func(t string) bool {
+		return t == "float" || t == "double"
+	}
+
+	if (oldType == "bool" && (isIntegerType(newType) || isFloatType(newType))) ||
+		((isIntegerType(oldType) || isFloatType(oldType)) && newType == "bool") {
 		if valueStr == "0" || valueStr == "1" {
 			canSeamlessChange = true
 		}
@@ -650,9 +707,9 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 		}
 
 		node.Type = newType
-		if oldType == "bool" && newType == "number" {
+		if oldType == "bool" && (isIntegerType(newType) || isFloatType(newType)) {
 			node.Value = valueStr
-		} else if oldType == "number" && newType == "bool" {
+		} else if (isIntegerType(oldType) || isFloatType(oldType)) && newType == "bool" {
 			if valueStr == "1" {
 				node.Value = true
 			} else if valueStr == "0" {
@@ -662,10 +719,10 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 
 		for _, field := range affectedFields {
 			field.Type = newType
-			if oldType == "bool" && newType == "number" {
+			if oldType == "bool" && (isIntegerType(newType) || isFloatType(newType)) {
 				fieldValueStr := a.nodeValueToString(field)
 				field.Value = fieldValueStr
-			} else if oldType == "number" && newType == "bool" {
+			} else if (isIntegerType(oldType) || isFloatType(oldType)) && newType == "bool" {
 				fieldValueStr := a.nodeValueToString(field)
 				if fieldValueStr == "1" {
 					field.Value = true
@@ -814,7 +871,7 @@ func (a *protoTreeAdapter) updateNodeValue(uid widget.TreeNodeID, valueStr strin
 	switch newType {
 	case "string":
 		node.Value = valueStr
-	case "number":
+	case "int32", "int64", "uint32", "uint64", "sint32", "sint64", "float", "double":
 		node.Value = valueStr
 	case "bool":
 		trimmed := strings.TrimSpace(valueStr)
@@ -867,7 +924,7 @@ func (a *protoTreeAdapter) getNodeByUID(uid widget.TreeNodeID) *protobuf.TreeNod
 
 func (a *protoTreeAdapter) getAvailableTypesForNode(node *protobuf.TreeNode) []string {
 	messageTypes := a.getAllMessageTypes()
-	baseTypes := []string{"string", "number", "bool"}
+	baseTypes := []string{"string", "int32", "int64", "uint32", "uint64", "sint32", "sint64", "bool", "float", "double"}
 	allTypes := make([]string, 0, len(baseTypes)+len(messageTypes))
 	allTypes = append(allTypes, baseTypes...)
 

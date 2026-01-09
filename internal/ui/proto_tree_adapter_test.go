@@ -23,7 +23,7 @@ func TestHandleTypeChangeToMessageWithExistingChildren(t *testing.T) {
 
 	existingChild2 := &protobuf.TreeNode{
 		Name:     "field_2",
-		Type:     "number",
+		Type:     "int64",
 		Value:    "42",
 		FieldNum: 2,
 		Children: make([]*protobuf.TreeNode, 0),
@@ -81,7 +81,7 @@ func TestHandleTypeChangeToMessageWithoutChildrenWithSourceMessage(t *testing.T)
 			},
 			{
 				Name:     "field_2",
-				Type:     "number",
+				Type:     "int64",
 				Value:    "100",
 				FieldNum: 2,
 				Children: make([]*protobuf.TreeNode, 0),
@@ -389,14 +389,14 @@ func TestHandleTypeChangeWithFieldTypeSync(t *testing.T) {
 
 	adapter := newProtoTreeAdapter(root)
 
-	adapter.handleTypeChange("0:0", "string", "number")
+	adapter.handleTypeChange("0:0", "string", "int64")
 
-	if field5InMessage1.Type != "number" {
-		t.Errorf("Expected field5InMessage1 type to be 'number', got '%s'", field5InMessage1.Type)
+	if field5InMessage1.Type != "int64" {
+		t.Errorf("Expected field5InMessage1 type to be 'int64', got '%s'", field5InMessage1.Type)
 	}
 
-	if field5InMessage2.Type != "number" {
-		t.Errorf("Expected field5InMessage2 type to be 'number', got '%s'", field5InMessage2.Type)
+	if field5InMessage2.Type != "int64" {
+		t.Errorf("Expected field5InMessage2 type to be 'int64', got '%s'", field5InMessage2.Type)
 	}
 
 	if field5InMessage1.Value != nil {
@@ -456,14 +456,14 @@ func TestHandleTypeChangeWithSeamlessChangeAndFieldTypeSync(t *testing.T) {
 
 	adapter := newProtoTreeAdapter(root)
 
-	adapter.handleTypeChange("0:0", "bool", "number")
+	adapter.handleTypeChange("0:0", "bool", "int64")
 
-	if field5InMessage1.Type != "number" {
-		t.Errorf("Expected field5InMessage1 type to be 'number', got '%s'", field5InMessage1.Type)
+	if field5InMessage1.Type != "int64" {
+		t.Errorf("Expected field5InMessage1 type to be 'int64', got '%s'", field5InMessage1.Type)
 	}
 
-	if field5InMessage2.Type != "number" {
-		t.Errorf("Expected field5InMessage2 type to be 'number', got '%s'", field5InMessage2.Type)
+	if field5InMessage2.Type != "int64" {
+		t.Errorf("Expected field5InMessage2 type to be 'int64', got '%s'", field5InMessage2.Type)
 	}
 
 	if field5InMessage1.Value != "1" {
@@ -677,7 +677,7 @@ func TestGetAvailableTypesForNode_RecursiveTypeExcluded(t *testing.T) {
 
 	foundBaseTypes := false
 	for _, option := range availableTypes {
-		if option == "string" || option == "number" || option == "bool" {
+		if option == "string" || option == "int32" || option == "int64" || option == "uint32" || option == "uint64" || option == "sint32" || option == "sint64" || option == "bool" || option == "float" || option == "double" {
 			foundBaseTypes = true
 			break
 		}
@@ -797,5 +797,74 @@ func TestGetAvailableTypesForNode_CurrentTypeStillAvailableEvenIfRecursive(t *te
 
 	if !foundCurrentType {
 		t.Error("Expected current type 'message_1' to be present in available types (even though it's recursive), but it was not found")
+	}
+}
+
+func TestValidateValue_Int64(t *testing.T) {
+	root := &protobuf.TreeNode{
+		Name:     "root",
+		Type:     "message",
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+	adapter := newProtoTreeAdapter(root)
+
+	validValues := []string{"0", "1", "42", "-10", "123456789", "-"}
+	for _, val := range validValues {
+		if !adapter.validateValue(val, "int64") {
+			t.Errorf("Expected '%s' to be valid for int64, but it was rejected", val)
+		}
+	}
+
+	invalidValues := []string{"3.14", "1.5", "0.0", "abc", "12.34"}
+	for _, val := range invalidValues {
+		if adapter.validateValue(val, "int64") {
+			t.Errorf("Expected '%s' to be invalid for int64, but it was accepted", val)
+		}
+	}
+}
+
+func TestValidateValue_Double(t *testing.T) {
+	root := &protobuf.TreeNode{
+		Name:     "root",
+		Type:     "message",
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+	adapter := newProtoTreeAdapter(root)
+
+	validValues := []string{"0.0", "1.5", "3.14", "-2.5", "42", "-10", "-", ".", "-.", "3.", "-3.", "0."}
+	for _, val := range validValues {
+		if !adapter.validateValue(val, "double") {
+			t.Errorf("Expected '%s' to be valid for double, but it was rejected", val)
+		}
+	}
+
+	invalidValues := []string{"abc", "not a number"}
+	for _, val := range invalidValues {
+		if adapter.validateValue(val, "double") {
+			t.Errorf("Expected '%s' to be invalid for double, but it was accepted", val)
+		}
+	}
+}
+
+func TestValidateValue_Float(t *testing.T) {
+	root := &protobuf.TreeNode{
+		Name:     "root",
+		Type:     "message",
+		Children: make([]*protobuf.TreeNode, 0),
+	}
+	adapter := newProtoTreeAdapter(root)
+
+	validValues := []string{"0.0", "1.5", "3.14", "-2.5", "42", "-10", "-", ".", "-.", "3.", "-3.", "0."}
+	for _, val := range validValues {
+		if !adapter.validateValue(val, "float") {
+			t.Errorf("Expected '%s' to be valid for float, but it was rejected", val)
+		}
+	}
+
+	invalidValues := []string{"abc", "not a number"}
+	for _, val := range invalidValues {
+		if adapter.validateValue(val, "float") {
+			t.Errorf("Expected '%s' to be invalid for float, but it was accepted", val)
+		}
 	}
 }

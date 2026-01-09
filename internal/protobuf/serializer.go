@@ -103,7 +103,7 @@ func (s *Serializer) WriteNodeToTextFormat(builder *strings.Builder, node *TreeN
 						builder.WriteString("false")
 					}
 				}
-			} else if node.Type == "number" {
+			} else if node.Type == "int32" || node.Type == "int64" || node.Type == "uint32" || node.Type == "uint64" || node.Type == "sint32" || node.Type == "sint64" || node.Type == "float" || node.Type == "double" {
 				builder.WriteString(fmt.Sprintf("%v", node.Value))
 			} else {
 				switch v := node.Value.(type) {
@@ -259,10 +259,24 @@ func (s *Serializer) MapTypeToProtoType(ourType string) string {
 	switch ourType {
 	case "string":
 		return "string"
-	case "number":
+	case "int32":
+		return "int32"
+	case "int64":
 		return "int64"
+	case "uint32":
+		return "uint32"
+	case "uint64":
+		return "uint64"
+	case "sint32":
+		return "sint32"
+	case "sint64":
+		return "sint64"
 	case "bool":
 		return "bool"
+	case "float":
+		return "float"
+	case "double":
+		return "double"
 	default:
 		return "string"
 	}
@@ -329,7 +343,7 @@ func (s *Serializer) WriteNodeToTextFormatWithNames(builder *strings.Builder, no
 						builder.WriteString("false")
 					}
 				}
-			} else if node.Type == "number" {
+			} else if node.Type == "int32" || node.Type == "int64" || node.Type == "uint32" || node.Type == "uint64" || node.Type == "sint32" || node.Type == "sint64" || node.Type == "float" || node.Type == "double" {
 				builder.WriteString(fmt.Sprintf("%v", node.Value))
 			} else {
 				switch v := node.Value.(type) {
@@ -399,7 +413,7 @@ func (s *Serializer) WriteNodeToTextFormatWithFieldNames(builder *strings.Builde
 						builder.WriteString("false")
 					}
 				}
-			} else if node.Type == "number" {
+			} else if node.Type == "int32" || node.Type == "int64" || node.Type == "uint32" || node.Type == "uint64" || node.Type == "sint32" || node.Type == "sint64" || node.Type == "float" || node.Type == "double" {
 				builder.WriteString(fmt.Sprintf("%v", node.Value))
 			} else {
 				switch v := node.Value.(type) {

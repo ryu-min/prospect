@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -215,10 +217,15 @@ func (p *Parser) parseLine(line string) *TreeNode {
 	if strings.HasPrefix(valueStr, "\"") && strings.HasSuffix(valueStr, "\"") {
 		node.Type = "string"
 		node.Value = strings.Trim(valueStr, "\"")
-	} else if isNumeric(valueStr) {
+	} else if isHexFloat(valueStr) {
+		node.Type = "double"
+		decimalValue := convertHexFloatToDecimal(valueStr)
+		node.Value = decimalValue
+	} else if isFloat(valueStr) {
+		node.Type = "double"
+		node.Value = valueStr
+	} else if isInteger(valueStr) {
 		normalizedValue := parseSignedNumber(valueStr)
-		node.Type = "number"
-		node.Value = normalizedValue
 		if normalizedValue == "0" || normalizedValue == "1" {
 			node.Type = "bool"
 			if normalizedValue == "1" {
@@ -226,6 +233,9 @@ func (p *Parser) parseLine(line string) *TreeNode {
 			} else {
 				node.Value = false
 			}
+		} else {
+			node.Type = "int64"
+			node.Value = normalizedValue
 		}
 	} else {
 		node.Type = "unknown"
@@ -249,7 +259,50 @@ func isNumeric(s string) bool {
 	}
 	var unum uint64
 	_, err = fmt.Sscanf(s, "%d", &unum)
+	if err == nil {
+		return true
+	}
+	var fnum float64
+	_, err = fmt.Sscanf(s, "%f", &fnum)
 	return err == nil
+}
+
+func isInteger(s string) bool {
+	_, err := strconv.ParseInt(s, 10, 64)
+	if err == nil {
+		return true
+	}
+	_, err = strconv.ParseUint(s, 10, 64)
+	return err == nil
+}
+
+func isFloat(s string) bool {
+	if isInteger(s) {
+		return false
+	}
+	_, err := strconv.ParseFloat(s, 64)
+	return err == nil
+}
+
+func isHexFloat(s string) bool {
+	if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
+		var num uint64
+		_, err := fmt.Sscanf(s, "%x", &num)
+		return err == nil
+	}
+	return false
+}
+
+func convertHexFloatToDecimal(hexStr string) string {
+	hexStr = strings.TrimPrefix(strings.TrimPrefix(hexStr, "0x"), "0X")
+	var bits uint64
+	_, err := fmt.Sscanf(hexStr, "%x", &bits)
+	if err != nil {
+		return hexStr
+	}
+	
+	floatValue := math.Float64frombits(bits)
+	return strconv.FormatFloat(floatValue, 'g', -1, 64)
 }
 
 func parseSignedNumber(s string) string {

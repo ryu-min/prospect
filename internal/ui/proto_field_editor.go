@@ -23,7 +23,7 @@ type protoFieldEditor struct {
 }
 
 func newProtoFieldEditor(uid widget.TreeNodeID, adapter *protoTreeAdapter, messageTypes []string) *protoFieldEditor {
-	availableTypes := []string{"string", "number", "bool"}
+	availableTypes := []string{"string", "int32", "int64", "uint32", "uint64", "sint32", "sint64", "bool", "float", "double"}
 	availableTypes = append(availableTypes, messageTypes...)
 	nameLabel := widget.NewLabel("")
 	nameLabel.Wrapping = fyne.TextTruncate

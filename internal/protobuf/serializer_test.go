@@ -1,6 +1,7 @@
 package protobuf
 
 import (
+	"fmt"
 	"os/exec"
 	"strings"
 	"testing"
@@ -34,7 +35,7 @@ func TestGenerateProtoSchema_SimpleFields(t *testing.T) {
 
 	field2 := &TreeNode{
 		Name:     "field_2",
-		Type:     "number",
+		Type:     "int64",
 		FieldNum: 2,
 		Value:    "42",
 		Children: make([]*TreeNode, 0),
@@ -123,7 +124,7 @@ func TestGenerateProtoSchema_NestedMessage(t *testing.T) {
 
 	nestedField2 := &TreeNode{
 		Name:     "field_2",
-		Type:     "number",
+		Type:     "int64",
 		FieldNum: 2,
 		Value:    "100",
 		Children: make([]*TreeNode, 0),
@@ -219,8 +220,15 @@ func TestMapTypeToProtoType(t *testing.T) {
 		expected string
 	}{
 		{"string", "string"},
-		{"number", "int64"},
+		{"int32", "int32"},
+		{"int64", "int64"},
+		{"uint32", "uint32"},
+		{"uint64", "uint64"},
+		{"sint32", "sint32"},
+		{"sint64", "sint64"},
 		{"bool", "bool"},
+		{"float", "float"},
+		{"double", "double"},
 		{"unknown", "string"}, // По умолчанию string
 	}
 
@@ -260,7 +268,7 @@ func TestTreeToTextFormatWithNames_SimpleFields(t *testing.T) {
 
 	field2 := &TreeNode{
 		Name:     "field_2",
-		Type:     "number",
+		Type:     "int64",
 		FieldNum: 2,
 		Value:    "42",
 		Children: make([]*TreeNode, 0),
@@ -454,7 +462,7 @@ func TestSerializeRaw_RoundTrip(t *testing.T) {
 
 	field2 := &TreeNode{
 		Name:     "field_2",
-		Type:     "number",
+		Type:     "int64",
 		FieldNum: 2,
 		Value:    "42",
 		Children: make([]*TreeNode, 0),
@@ -501,7 +509,7 @@ func TestSerializeRaw_RoundTrip(t *testing.T) {
 		typeName string
 	}{
 		0: {1, "string"},
-		1: {2, "number"},
+		1: {2, "int64"},
 		2: {3, "bool"},
 	}
 
@@ -576,7 +584,7 @@ func TestSerializeRaw_WithNestedMessage(t *testing.T) {
 
 	nestedField2 := &TreeNode{
 		Name:     "field_2",
-		Type:     "number",
+		Type:     "int64",
 		FieldNum: 2,
 		Value:    "100",
 		Children: make([]*TreeNode, 0),
@@ -744,7 +752,7 @@ func TestGenerateProtoSchema_DuplicateMessageNames(t *testing.T) {
 
 	child2 := &TreeNode{
 		Name:     "field_2",
-		Type:     "number",
+		Type:     "int64",
 		FieldNum: 2,
 		Value:    "42",
 		Children: make([]*TreeNode, 0),
@@ -771,7 +779,7 @@ func TestGenerateProtoSchema_DuplicateMessageNames(t *testing.T) {
 
 	child4 := &TreeNode{
 		Name:     "field_2",
-		Type:     "number",
+		Type:     "int64",
 		FieldNum: 2,
 		Value:    "42",
 		Children: make([]*TreeNode, 0),
@@ -922,7 +930,7 @@ func TestGenerateProtoSchema_DuplicateMessageNames_ValidSchema(t *testing.T) {
 
 	child2 := &TreeNode{
 		Name:     "field_2",
-		Type:     "number",
+		Type:     "int64",
 		FieldNum: 2,
 		Value:    "42",
 		Children: make([]*TreeNode, 0),
@@ -949,7 +957,7 @@ func TestGenerateProtoSchema_DuplicateMessageNames_ValidSchema(t *testing.T) {
 
 	child4 := &TreeNode{
 		Name:     "field_2",
-		Type:     "number",
+		Type:     "int64",
 		FieldNum: 2,
 		Value:    "100",
 		Children: make([]*TreeNode, 0),
@@ -978,6 +986,109 @@ func TestGenerateProtoSchema_DuplicateMessageNames_ValidSchema(t *testing.T) {
 	}
 
 	t.Logf("Generated schema:\n%s", schema)
+}
+
+func TestMapTypeToProtoType_FloatTypes(t *testing.T) {
+	protocPath := "protoc"
+	serializer := NewSerializer(protocPath)
+
+	tests := []struct {
+		ourType      string
+		expectedProto string
+	}{
+		{"int32", "int32"},
+		{"int64", "int64"},
+		{"float", "float"},
+		{"double", "double"},
+	}
+
+	for _, tt := range tests {
+		result := serializer.MapTypeToProtoType(tt.ourType)
+		if result != tt.expectedProto {
+			t.Errorf("MapTypeToProtoType(%s) = %s, want %s", tt.ourType, result, tt.expectedProto)
+		}
+	}
+}
+
+func TestSerializeRaw_FloatValue(t *testing.T) {
+	protocPath := "protoc"
+	if _, err := exec.LookPath(protocPath); err != nil {
+		t.Skipf("Skipping test: protoc not found in PATH")
+		return
+	}
+
+	parser, err := NewParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	serializer := NewSerializer(protocPath)
+
+	root := &TreeNode{
+		Name:     "root",
+		Type:     "message",
+		Children: make([]*TreeNode, 0),
+	}
+
+	field1 := &TreeNode{
+		Name:     "field_1",
+		Type:     "double",
+		Value:    "3.14",
+		FieldNum: 1,
+		Children: make([]*TreeNode, 0),
+	}
+
+	field2 := &TreeNode{
+		Name:     "field_2",
+		Type:     "int64",
+		Value:    "42",
+		FieldNum: 2,
+		Children: make([]*TreeNode, 0),
+	}
+
+	root.Children = append(root.Children, field1, field2)
+
+	data, err := serializer.SerializeRaw(root)
+	if err != nil {
+		t.Fatalf("Failed to serialize: %v", err)
+	}
+
+	parsedTree, err := parser.ParseRaw(data)
+	if err != nil {
+		t.Fatalf("Failed to parse serialized data: %v", err)
+	}
+
+	if len(parsedTree.Children) != 2 {
+		t.Fatalf("Expected 2 children after round trip, got %d", len(parsedTree.Children))
+	}
+
+	foundFloat := false
+	foundInt := false
+	for _, child := range parsedTree.Children {
+		if child.FieldNum == 1 {
+			if child.Type != "double" {
+				t.Errorf("Expected field_1 type to be 'double', got '%s'", child.Type)
+			}
+			valueStr := fmt.Sprintf("%v", child.Value)
+			if valueStr != "3.14" {
+				t.Errorf("Expected field_1 value to be '3.14', got '%s'", valueStr)
+			}
+			foundFloat = true
+		}
+		if child.FieldNum == 2 {
+			if child.Type != "int64" {
+				t.Errorf("Expected field_2 type to be 'int64', got '%s'", child.Type)
+			}
+			foundInt = true
+		}
+	}
+
+	if !foundFloat {
+		t.Error("Float field (field_1) not found after round trip")
+	}
+	if !foundInt {
+		t.Error("Integer field (field_2) not found after round trip")
+	}
 }
 
 func TestSerializeRaw_BoolFalseValuePreserved(t *testing.T) {

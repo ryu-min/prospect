@@ -130,7 +130,7 @@ func TestParseRawWithNestedMessage(t *testing.T) {
 		{1, "string", "123 Main St"},
 		{2, "string", "New York alo"},
 		{3, "string", "USA"},
-		{4, "number", "12"},
+		{4, "int64", "12"},
 	}
 
 	if len(field4.Children) >= len(expectedFields) {
@@ -302,8 +302,8 @@ message TestMessage {
 		t.Fatal("field_1 not found")
 	}
 
-	if field1.Type != "number" {
-		t.Errorf("Expected field_1 type to be 'number', got '%s'", field1.Type)
+	if field1.Type != "int64" {
+		t.Errorf("Expected field_1 type to be 'int64', got '%s'", field1.Type)
 	}
 
 	expectedValue := "-30"
@@ -427,8 +427,8 @@ field_5: 100
 	if field5.FieldNum != 5 {
 		t.Errorf("Expected field_5 FieldNum to be 5, got %d", field5.FieldNum)
 	}
-	if field5.Type != "number" {
-		t.Errorf("Expected field_5 type to be 'number', got '%s'", field5.Type)
+	if field5.Type != "int64" {
+		t.Errorf("Expected field_5 type to be 'int64', got '%s'", field5.Type)
 	}
 
 	if len(field4.Children) < 2 {
@@ -448,8 +448,8 @@ field_5: 100
 			if child.Name != "field_2" {
 				t.Errorf("Expected nested field_2 name to be 'field_2', got '%s'", child.Name)
 			}
-			if child.Type != "number" {
-				t.Errorf("Expected nested field_2 type to be 'number', got '%s'", child.Type)
+			if child.Type != "int64" {
+				t.Errorf("Expected nested field_2 type to be 'int64', got '%s'", child.Type)
 			}
 		}
 	}
@@ -578,6 +578,61 @@ field_2 {
 	t.Logf("Nested message field naming test passed:")
 	t.Logf("  field_2: name=%s, fieldNum=%d, type=%s", field2.Name, field2.FieldNum, field2.Type)
 	t.Logf("  field_3: name=%s, fieldNum=%d, type=%s", field3.Name, field3.FieldNum, field3.Type)
+}
+
+func TestParseRaw_FloatNumber(t *testing.T) {
+	protocPath := "protoc"
+	if _, err := exec.LookPath(protocPath); err != nil {
+		t.Skipf("Skipping test: protoc not found in PATH")
+		return
+	}
+
+	parser, err := NewParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	output := "1: 3.14\n2: 42\n3: -2.5\n4: 0x40091eb851eb851f"
+	tree, err := parser.parseProtocOutput(output)
+	if err != nil {
+		t.Fatalf("Failed to parse output: %v", err)
+	}
+
+	if len(tree.Children) != 4 {
+		t.Fatalf("Expected 4 children, got %d", len(tree.Children))
+	}
+
+	field1 := tree.Children[0]
+	if field1.Type != "double" {
+		t.Errorf("Expected field_1 type to be 'double', got '%s'", field1.Type)
+	}
+	if field1.Value != "3.14" {
+		t.Errorf("Expected field_1 value to be '3.14', got '%v'", field1.Value)
+	}
+
+	field2 := tree.Children[1]
+	if field2.Type != "int64" {
+		t.Errorf("Expected field_2 type to be 'int64', got '%s'", field2.Type)
+	}
+	if field2.Value != "42" {
+		t.Errorf("Expected field_2 value to be '42', got '%v'", field2.Value)
+	}
+
+	field3 := tree.Children[2]
+	if field3.Type != "double" {
+		t.Errorf("Expected field_3 type to be 'double', got '%s'", field3.Type)
+	}
+	if field3.Value != "-2.5" {
+		t.Errorf("Expected field_3 value to be '-2.5', got '%v'", field3.Value)
+	}
+
+	field4 := tree.Children[3]
+	if field4.Type != "double" {
+		t.Errorf("Expected field_4 type to be 'double', got '%s'", field4.Type)
+	}
+	if field4.Value != "3.14" {
+		t.Errorf("Expected field_4 value to be '3.14', got '%v'", field4.Value)
+	}
 }
 
 func TestParseRaw_MessageFieldNameMatchesFieldNum(t *testing.T) {
