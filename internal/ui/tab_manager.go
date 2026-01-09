@@ -9,21 +9,31 @@ import (
 
 type tabManager struct {
 	widget.BaseWidget
-	tabs        []*tabData
-	selectedTab int
-	addCallback func()
+	tabs         []*tabData
+	selectedTab  int
+	addCallback  func()
+	toolbarMgr   *toolbarManager
 }
 
 type tabData struct {
-	title    string
-	content  fyne.CanvasObject
-	filePath string
+	title           string
+	content         fyne.CanvasObject
+	filePath        string
+	toolbarCallbacks *toolbarCallbacks
+}
+
+type toolbarCallbacks struct {
+	openCallback        func()
+	saveCallback        func()
+	applySchemaCallback func()
+	exportJSONCallback  func()
 }
 
 func newTabManager() *tabManager {
 	tm := &tabManager{
 		tabs:        make([]*tabData, 0),
 		selectedTab: -1,
+		toolbarMgr:  newToolbarManager(),
 	}
 	tm.ExtendBaseWidget(tm)
 	return tm
@@ -92,6 +102,21 @@ func (tm *tabManager) SelectTab(index int) {
 func (tm *tabManager) selectTabWithoutSave(index int) {
 	if index >= 0 && index < len(tm.tabs) {
 		tm.selectedTab = index
+		if tm.tabs[index].toolbarCallbacks != nil {
+			callbacks := tm.tabs[index].toolbarCallbacks
+			if callbacks.openCallback != nil {
+				tm.toolbarMgr.SetOpenCallback(callbacks.openCallback)
+			}
+			if callbacks.saveCallback != nil {
+				tm.toolbarMgr.SetSaveCallback(callbacks.saveCallback)
+			}
+			if callbacks.applySchemaCallback != nil {
+				tm.toolbarMgr.SetApplySchemaCallback(callbacks.applySchemaCallback)
+			}
+			if callbacks.exportJSONCallback != nil {
+				tm.toolbarMgr.SetExportJSONCallback(callbacks.exportJSONCallback)
+			}
+		}
 		tm.Refresh()
 	}
 }
@@ -123,6 +148,16 @@ func (tm *tabManager) SetTabFilePath(filePath string) {
 	if tm.selectedTab >= 0 && tm.selectedTab < len(tm.tabs) {
 		tm.tabs[tm.selectedTab].filePath = filePath
 		go saveTabState(tm)
+	}
+}
+
+func (tm *tabManager) GetToolbarManager() *toolbarManager {
+	return tm.toolbarMgr
+}
+
+func (tm *tabManager) SetCurrentTabToolbarCallbacks(callbacks *toolbarCallbacks) {
+	if tm.selectedTab >= 0 && tm.selectedTab < len(tm.tabs) {
+		tm.tabs[tm.selectedTab].toolbarCallbacks = callbacks
 	}
 }
 

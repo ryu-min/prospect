@@ -40,13 +40,18 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 
 	dialogState := getFileDialogState()
 
-	var openBtn *widget.Button
-	var saveBtn *widget.Button
-	var applySchemaBtn *widget.Button
-	var exportJSONBtn *widget.Button
-	var buttonPanel fyne.CanvasObject
+	var toolbarMgr *toolbarManager
+	if browserTabs != nil {
+		toolbarMgr = browserTabs.GetToolbarManager()
+	}
 
-	openBtn = widget.NewButton("Open binary proto file", func() {
+	var openCallback func()
+	var saveCallback func()
+	var applySchemaCallback func()
+	var exportJSONCallback func()
+
+	if toolbarMgr != nil {
+		openCallback = func() {
 		fileDialog := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
 			if err != nil {
 				log.Printf("Dialog error: %v", err)
@@ -113,13 +118,7 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 			_ = adapter.ChildUIDs("root")
 			_ = adapter.IsBranch("root")
 
-			newBorder := container.NewBorder(
-				buttonPanel,
-				nil,
-				nil,
-				nil,
-				newScrollContainer,
-			)
+			newBorder := container.NewPadded(newScrollContainer)
 			if browserTabs != nil {
 				browserTabs.UpdateTabContent(container.NewPadded(newBorder))
 			} else {
@@ -134,9 +133,10 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 
 		fileDialog.Resize(dialogState.getDialogSize())
 		fileDialog.Show()
-	})
+		}
+		toolbarMgr.SetOpenCallback(openCallback)
 
-	applySchemaBtn = widget.NewButton("Apply proto schema", func() {
+		applySchemaCallback = func() {
 		if currentTree == nil {
 			dialog.ShowInformation("Information", "Please open a proto file first", parentWindow)
 			return
@@ -171,13 +171,7 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 			treeWidget = newTreeWidget
 			newScrollContainer := container.NewScroll(newTreeWidget)
 			treeScrollContainer = newScrollContainer
-			newBorder := container.NewBorder(
-				buttonPanel,
-				nil,
-				nil,
-				nil,
-				newScrollContainer,
-			)
+			newBorder := container.NewPadded(newScrollContainer)
 			if browserTabs != nil {
 				browserTabs.UpdateTabContent(container.NewPadded(newBorder))
 			}
@@ -190,9 +184,10 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 
 		fileDialog.Resize(dialogState.getDialogSize())
 		fileDialog.Show()
-	})
+		}
+		toolbarMgr.SetApplySchemaCallback(applySchemaCallback)
 
-	saveBtn = widget.NewButton("Save", func() {
+		saveCallback = func() {
 		if currentTree == nil {
 			dialog.ShowInformation("Information", "Please open a proto file first", parentWindow)
 			return
@@ -247,9 +242,10 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 
 		saveDialog.Resize(dialogState.getDialogSize())
 		saveDialog.Show()
-	})
+		}
+		toolbarMgr.SetSaveCallback(saveCallback)
 
-	exportJSONBtn = widget.NewButton("Export to JSON", func() {
+		exportJSONCallback = func() {
 		if currentTree == nil {
 			dialog.ShowInformation("Information", "Please open a proto file first", parentWindow)
 			return
@@ -287,14 +283,19 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 
 		fileDialog.Resize(dialogState.getDialogSize())
 		fileDialog.Show()
-	})
+		}
+		toolbarMgr.SetExportJSONCallback(exportJSONCallback)
 
-	buttonPanel = container.NewHBox(
-		openBtn,
-		saveBtn,
-		applySchemaBtn,
-		exportJSONBtn,
-	)
+		if browserTabs != nil {
+			callbacks := &toolbarCallbacks{
+				openCallback:        openCallback,
+				saveCallback:        saveCallback,
+				applySchemaCallback: applySchemaCallback,
+				exportJSONCallback:  exportJSONCallback,
+			}
+			browserTabs.SetCurrentTabToolbarCallbacks(callbacks)
+		}
+	}
 
 	if filePath != "" {
 		if err := loadFileIntoView(filePath, parser, &currentTree, &treeWidget, &treeScrollContainer, parentWindow, browserTabs, dialogState, &currentFilePath); err != nil {
@@ -302,20 +303,7 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 		}
 	}
 
-	createMainBorder := func() fyne.CanvasObject {
-		return container.NewBorder(
-			buttonPanel,         // верх - кнопки
-			nil,                 // низ
-			nil,                 // лево
-			nil,                 // право
-			treeScrollContainer, // центр - дерево
-		)
-	}
-
-	mainBorder := createMainBorder()
-	content := mainBorder
-
-	return container.NewPadded(content)
+	return container.NewPadded(treeScrollContainer)
 }
 
 func loadFileIntoView(filePath string, parser *protobuf.Parser, currentTree **protobuf.TreeNode, treeWidget **widget.Tree, treeScrollContainer **container.Scroll, parentWindow fyne.Window, browserTabs *tabManager, dialogState *fileDialogState, currentFilePath *string) error {

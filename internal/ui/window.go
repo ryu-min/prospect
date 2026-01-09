@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 )
 
 var tabCounter int = 0
@@ -34,7 +35,16 @@ func NewMainWindow(fyneApp fyne.App) fyne.Window {
 		saveTabState(browserTabs)
 	})
 
-	window.SetContent(browserTabs)
+	toolbar := browserTabs.GetToolbarManager().GetToolbar()
+	mainContent := container.NewBorder(
+		toolbar,
+		nil,
+		nil,
+		nil,
+		browserTabs,
+	)
+
+	window.SetContent(mainContent)
 	return window
 }
 
