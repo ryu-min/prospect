@@ -688,14 +688,81 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 	isIntegerType := func(t string) bool {
 		return t == "int32" || t == "int64" || t == "uint32" || t == "uint64" || t == "sint32" || t == "sint64"
 	}
+	isSignedIntegerType := func(t string) bool {
+		return t == "int32" || t == "int64" || t == "sint32" || t == "sint64"
+	}
+	isUnsignedIntegerType := func(t string) bool {
+		return t == "uint32" || t == "uint64"
+	}
 	isFloatType := func(t string) bool {
 		return t == "float" || t == "double"
+	}
+
+	isCompatibleNumericType := func(oldT, newT string, valStr string) bool {
+		if oldT == newT {
+			return true
+		}
+		
+		if isFloatType(oldT) && isFloatType(newT) {
+			return true
+		}
+		
+		if isSignedIntegerType(oldT) && isSignedIntegerType(newT) {
+			return true
+		}
+		
+		if isUnsignedIntegerType(oldT) && isUnsignedIntegerType(newT) {
+			val, err := strconv.ParseUint(valStr, 10, 64)
+			if err != nil {
+				return false
+			}
+			if newT == "uint32" && val > 4294967295 {
+				return false
+			}
+			return true
+		}
+		
+		if (isSignedIntegerType(oldT) && isUnsignedIntegerType(newT)) || (isUnsignedIntegerType(oldT) && isSignedIntegerType(newT)) {
+			val, err := strconv.ParseInt(valStr, 10, 64)
+			if err != nil {
+				return false
+			}
+			return val >= 0
+		}
+		
+		return false
 	}
 
 	if (oldType == "bool" && (isIntegerType(newType) || isFloatType(newType))) ||
 		((isIntegerType(oldType) || isFloatType(oldType)) && newType == "bool") {
 		if valueStr == "0" || valueStr == "1" {
 			canSeamlessChange = true
+		}
+	} else if isIntegerType(oldType) && isIntegerType(newType) {
+		if isCompatibleNumericType(oldType, newType, valueStr) {
+			canSeamlessChange = true
+		}
+	} else if isFloatType(oldType) && isFloatType(newType) {
+		if isCompatibleNumericType(oldType, newType, valueStr) {
+			canSeamlessChange = true
+		}
+	} else if isIntegerType(oldType) && isFloatType(newType) {
+		canSeamlessChange = true
+	} else if isFloatType(oldType) && isIntegerType(newType) {
+		trimmedForFloat := valueStr
+		if strings.HasSuffix(trimmedForFloat, ".") {
+			trimmedForFloat = strings.TrimSuffix(trimmedForFloat, ".")
+		}
+		floatVal, err := strconv.ParseFloat(trimmedForFloat, 64)
+		if err == nil {
+			intVal := int64(floatVal)
+			diff := floatVal - float64(intVal)
+			if diff < 0 {
+				diff = -diff
+			}
+			if diff < 0.0000001 {
+				canSeamlessChange = true
+			}
 		}
 	}
 
@@ -715,6 +782,22 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 			} else if valueStr == "0" {
 				node.Value = false
 			}
+		} else if (isIntegerType(oldType) && isIntegerType(newType)) || (isFloatType(oldType) && isFloatType(newType)) {
+			node.Value = valueStr
+		} else if isIntegerType(oldType) && isFloatType(newType) {
+			node.Value = valueStr
+		} else if isFloatType(oldType) && isIntegerType(newType) {
+			trimmedForFloat := valueStr
+			if strings.HasSuffix(trimmedForFloat, ".") {
+				trimmedForFloat = strings.TrimSuffix(trimmedForFloat, ".")
+			}
+			floatVal, err := strconv.ParseFloat(trimmedForFloat, 64)
+			if err == nil {
+				intVal := int64(floatVal)
+				node.Value = fmt.Sprintf("%d", intVal)
+			} else {
+				node.Value = valueStr
+			}
 		}
 
 		for _, field := range affectedFields {
@@ -728,6 +811,25 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 					field.Value = true
 				} else if fieldValueStr == "0" {
 					field.Value = false
+				}
+			} else if (isIntegerType(oldType) && isIntegerType(newType)) || (isFloatType(oldType) && isFloatType(newType)) {
+				fieldValueStr := a.nodeValueToString(field)
+				field.Value = fieldValueStr
+			} else if isIntegerType(oldType) && isFloatType(newType) {
+				fieldValueStr := a.nodeValueToString(field)
+				field.Value = fieldValueStr
+			} else if isFloatType(oldType) && isIntegerType(newType) {
+				fieldValueStr := a.nodeValueToString(field)
+				trimmedForFloat := fieldValueStr
+				if strings.HasSuffix(trimmedForFloat, ".") {
+					trimmedForFloat = strings.TrimSuffix(trimmedForFloat, ".")
+				}
+				floatVal, err := strconv.ParseFloat(trimmedForFloat, 64)
+				if err == nil {
+					intVal := int64(floatVal)
+					field.Value = fmt.Sprintf("%d", intVal)
+				} else {
+					field.Value = fieldValueStr
 				}
 			}
 		}
@@ -747,27 +849,97 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 
 	oldValue := node.Value
 	parentMessage := a.findParentMessage(node)
+	
+	isIntegerTypeCheck := func(t string) bool {
+		return t == "int32" || t == "int64" || t == "uint32" || t == "uint64" || t == "sint32" || t == "sint64"
+	}
+	isFloatTypeCheck := func(t string) bool {
+		return t == "float" || t == "double"
+	}
+	isCompatibleNumericTypeCheck := func(oldT, newT string, valStr string) bool {
+		if oldT == newT {
+			return true
+		}
+		
+		if isFloatType(oldT) && isFloatType(newT) {
+			return true
+		}
+		
+		isSignedIntegerType := func(t string) bool {
+			return t == "int32" || t == "int64" || t == "sint32" || t == "sint64"
+		}
+		isUnsignedIntegerType := func(t string) bool {
+			return t == "uint32" || t == "uint64"
+		}
+		
+		if isSignedIntegerType(oldT) && isSignedIntegerType(newT) {
+			return true
+		}
+		
+		if isUnsignedIntegerType(oldT) && isUnsignedIntegerType(newT) {
+			val, err := strconv.ParseUint(valStr, 10, 64)
+			if err != nil {
+				return false
+			}
+			if newT == "uint32" && val > 4294967295 {
+				return false
+			}
+			return true
+		}
+		
+		if (isSignedIntegerType(oldT) && isUnsignedIntegerType(newT)) || (isUnsignedIntegerType(oldT) && isSignedIntegerType(newT)) {
+			val, err := strconv.ParseInt(valStr, 10, 64)
+			if err != nil {
+				return false
+			}
+			return val >= 0
+		}
+		
+		return false
+	}
 
 	if parentMessage != nil {
 		affectedFields := a.findFieldsWithSameFieldNumInMessageType(node, parentMessage.Type, node.FieldNum)
 		if len(affectedFields) > 0 {
+			valueStr := a.nodeValueToString(node)
+			shouldPreserveValue := (isIntegerTypeCheck(oldType) && isIntegerTypeCheck(newType) && isCompatibleNumericTypeCheck(oldType, newType, valueStr)) ||
+				(isFloatTypeCheck(oldType) && isFloatTypeCheck(newType) && isCompatibleNumericTypeCheck(oldType, newType, valueStr))
+			
 			a.showFieldTypeSyncDialog(
 				node.FieldNum,
 				oldType,
 				newType,
 				len(affectedFields),
 				func() {
-					node.Value = nil
+					if shouldPreserveValue {
+						node.Value = valueStr
+					} else {
+						node.Value = nil
+					}
 					node.Type = newType
 					if editWidget, ok := a.editWidgets[uid]; ok {
-						editWidget.entry.SetText("")
+						if shouldPreserveValue {
+							editWidget.entry.SetText(valueStr)
+						} else {
+							editWidget.entry.SetText("")
+						}
 						editWidget.typeCombo.SetSelected(newType)
 						a.updateEntryValidation(uid, newType)
 					}
 
 					for _, field := range affectedFields {
-						field.Value = nil
 						field.Type = newType
+						if shouldPreserveValue {
+							fieldValueStr := a.nodeValueToString(field)
+							if (isIntegerTypeCheck(oldType) && isIntegerTypeCheck(newType) && isCompatibleNumericTypeCheck(oldType, newType, fieldValueStr)) ||
+								(isFloatTypeCheck(oldType) && isFloatTypeCheck(newType) && isCompatibleNumericTypeCheck(oldType, newType, fieldValueStr)) {
+								field.Value = fieldValueStr
+							} else {
+								field.Value = nil
+							}
+						} else {
+							field.Value = nil
+						}
 					}
 
 					if a.treeWidget != nil {
@@ -789,14 +961,26 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 		}
 	}
 
+	valueStrForDialog := a.nodeValueToString(node)
+	shouldPreserveValueForDialog := (isIntegerTypeCheck(oldType) && isIntegerTypeCheck(newType) && isCompatibleNumericTypeCheck(oldType, newType, valueStrForDialog)) ||
+		(isFloatTypeCheck(oldType) && isFloatTypeCheck(newType) && isCompatibleNumericTypeCheck(oldType, newType, valueStrForDialog))
+	
 	a.showTypeChangeDialog(
 		oldType,
 		newType,
 		func() {
-			node.Value = nil
+			if shouldPreserveValueForDialog {
+				node.Value = valueStrForDialog
+			} else {
+				node.Value = nil
+			}
 			node.Type = newType
 			if editWidget, ok := a.editWidgets[uid]; ok {
-				editWidget.entry.SetText("")
+				if shouldPreserveValueForDialog {
+					editWidget.entry.SetText(valueStrForDialog)
+				} else {
+					editWidget.entry.SetText("")
+				}
 				editWidget.typeCombo.SetSelected(newType)
 				a.updateEntryValidation(uid, newType)
 			}
