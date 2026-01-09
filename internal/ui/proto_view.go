@@ -193,13 +193,6 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 			return
 		}
 
-		serializer := protobuf.NewSerializer(parser.GetProtocPath())
-		binaryData, err := serializer.SerializeRaw(currentTree)
-		if err != nil {
-			dialog.ShowError(fmt.Errorf("serialization error: %w", err), parentWindow)
-			return
-		}
-
 		saveDialog := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
 			if err != nil {
 				log.Printf("Save dialog error: %v", err)
@@ -220,6 +213,13 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 			}
 
 			dialogState.setLastSaveDir(writer.URI())
+
+			serializer := protobuf.NewSerializer(parser.GetProtocPath())
+			binaryData, err := serializer.SerializeRaw(currentTree)
+			if err != nil {
+				dialog.ShowError(fmt.Errorf("serialization error: %w", err), parentWindow)
+				return
+			}
 
 			if _, err := writer.Write(binaryData); err != nil {
 				dialog.ShowError(fmt.Errorf("write error: %w", err), parentWindow)
