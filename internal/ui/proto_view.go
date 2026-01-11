@@ -49,249 +49,295 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 	var saveCallback func()
 	var applySchemaCallback func()
 	var exportJSONCallback func()
+	var exportSchemaCallback func()
 
 	if toolbarMgr != nil {
 		openCallback = func() {
-		fileDialog := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
-			if err != nil {
-				log.Printf("Dialog error: %v", err)
-				dialog.ShowError(err, parentWindow)
-				return
-			}
-			if reader == nil {
-				return
-			}
-			defer reader.Close()
-
-			currentFilePath = reader.URI().Path()
-
-			if browserTabs != nil {
-				fileName := filepath.Base(currentFilePath)
-				browserTabs.UpdateTabTitle(fileName)
-				browserTabs.SetTabFilePath(currentFilePath)
-			}
-
-			dialogState.setLastOpenDir(reader.URI())
-
-			data := make([]byte, 0)
-			buf := make([]byte, 4096)
-			for {
-				n, err := reader.Read(buf)
-				if n > 0 {
-					data = append(data, buf[:n]...)
-				}
+			fileDialog := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
 				if err != nil {
-					break
+					log.Printf("Dialog error: %v", err)
+					dialog.ShowError(err, parentWindow)
+					return
 				}
+				if reader == nil {
+					return
+				}
+				defer reader.Close()
+
+				currentFilePath = reader.URI().Path()
+
+				if browserTabs != nil {
+					fileName := filepath.Base(currentFilePath)
+					browserTabs.UpdateTabTitle(fileName)
+					browserTabs.SetTabFilePath(currentFilePath)
+				}
+
+				dialogState.setLastOpenDir(reader.URI())
+
+				data := make([]byte, 0)
+				buf := make([]byte, 4096)
+				for {
+					n, err := reader.Read(buf)
+					if n > 0 {
+						data = append(data, buf[:n]...)
+					}
+					if err != nil {
+						break
+					}
+				}
+
+				log.Printf("Parsing proto file: %s", reader.URI().Path())
+
+				tree, err := parser.ParseRaw(data)
+				if err != nil {
+					dialog.ShowError(fmt.Errorf("parsing error: %w", err), parentWindow)
+					return
+				}
+
+				currentTree = tree
+
+				adapter := newProtoTreeAdapter(tree)
+				adapter.SetWindow(parentWindow)
+
+				newTreeWidget := widget.NewTree(adapter.ChildUIDs, adapter.IsBranch, adapter.CreateNode, adapter.UpdateNode)
+				adapter.SetTreeWidget(newTreeWidget)
+
+				rootChildren := adapter.ChildUIDs("")
+
+				if len(rootChildren) > 0 {
+					newTreeWidget.OpenBranch("")
+				}
+
+				newTreeWidget.Refresh()
+
+				treeWidget = newTreeWidget
+
+				newScrollContainer := container.NewScroll(newTreeWidget)
+				newScrollContainer.Refresh()
+				treeScrollContainer = newScrollContainer
+
+				_ = adapter.ChildUIDs("root")
+				_ = adapter.IsBranch("root")
+
+				newBorder := container.NewPadded(newScrollContainer)
+				if browserTabs != nil {
+					browserTabs.UpdateTabContent(container.NewPadded(newBorder))
+				} else {
+					log.Printf("Error: browserTabs is nil")
+				}
+				log.Printf("Proto file parsed successfully, tree updated")
+			}, parentWindow)
+
+			if lastDir := dialogState.getLastOpenDir(); lastDir != nil {
+				fileDialog.SetLocation(lastDir)
 			}
 
-			log.Printf("Parsing proto file: %s", reader.URI().Path())
-
-			tree, err := parser.ParseRaw(data)
-			if err != nil {
-				dialog.ShowError(fmt.Errorf("parsing error: %w", err), parentWindow)
-				return
-			}
-
-			currentTree = tree
-
-			adapter := newProtoTreeAdapter(tree)
-			adapter.SetWindow(parentWindow)
-
-			newTreeWidget := widget.NewTree(adapter.ChildUIDs, adapter.IsBranch, adapter.CreateNode, adapter.UpdateNode)
-			adapter.SetTreeWidget(newTreeWidget)
-
-			rootChildren := adapter.ChildUIDs("")
-
-			if len(rootChildren) > 0 {
-				newTreeWidget.OpenBranch("")
-			}
-
-			newTreeWidget.Refresh()
-
-			treeWidget = newTreeWidget
-
-			newScrollContainer := container.NewScroll(newTreeWidget)
-			newScrollContainer.Refresh()
-			treeScrollContainer = newScrollContainer
-
-			_ = adapter.ChildUIDs("root")
-			_ = adapter.IsBranch("root")
-
-			newBorder := container.NewPadded(newScrollContainer)
-			if browserTabs != nil {
-				browserTabs.UpdateTabContent(container.NewPadded(newBorder))
-			} else {
-				log.Printf("Error: browserTabs is nil")
-			}
-			log.Printf("Proto file parsed successfully, tree updated")
-		}, parentWindow)
-
-		if lastDir := dialogState.getLastOpenDir(); lastDir != nil {
-			fileDialog.SetLocation(lastDir)
-		}
-
-		fileDialog.Resize(dialogState.getDialogSize())
-		fileDialog.Show()
+			fileDialog.Resize(dialogState.getDialogSize())
+			fileDialog.Show()
 		}
 		toolbarMgr.SetOpenCallback(openCallback)
 
 		applySchemaCallback = func() {
-		if currentTree == nil {
-			dialog.ShowInformation("Information", "Please open a proto file first", parentWindow)
-			return
-		}
-
-		fileDialog := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
-			if err != nil {
-				dialog.ShowError(err, parentWindow)
-				return
-			}
-			if reader == nil {
-				return
-			}
-			defer reader.Close()
-
-			dialogState.setLastSchemaDir(reader.URI())
-
-			schemaPath := reader.URI().Path()
-			log.Printf("Applying schema: %s", schemaPath)
-
-			tree, err := parser.ApplySchema(currentTree, schemaPath)
-			if err != nil {
-				dialog.ShowError(fmt.Errorf("error applying schema: %w", err), parentWindow)
+			if currentTree == nil {
+				dialog.ShowInformation("Information", "Please open a proto file first", parentWindow)
 				return
 			}
 
-			currentTree = tree
-			adapter := newProtoTreeAdapter(tree)
-			adapter.SetWindow(parentWindow) // Устанавливаем окно для диалогов
-			newTreeWidget := widget.NewTree(adapter.ChildUIDs, adapter.IsBranch, adapter.CreateNode, adapter.UpdateNode)
-			newTreeWidget.OpenBranch("root")
-			treeWidget = newTreeWidget
-			newScrollContainer := container.NewScroll(newTreeWidget)
-			treeScrollContainer = newScrollContainer
-			newBorder := container.NewPadded(newScrollContainer)
-			if browserTabs != nil {
-				browserTabs.UpdateTabContent(container.NewPadded(newBorder))
+			fileDialog := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
+				if err != nil {
+					dialog.ShowError(err, parentWindow)
+					return
+				}
+				if reader == nil {
+					return
+				}
+				defer reader.Close()
+
+				dialogState.setLastSchemaDir(reader.URI())
+
+				schemaPath := reader.URI().Path()
+				log.Printf("Applying schema: %s", schemaPath)
+
+				tree, err := parser.ApplySchema(currentTree, schemaPath)
+				if err != nil {
+					dialog.ShowError(fmt.Errorf("error applying schema: %w", err), parentWindow)
+					return
+				}
+
+				currentTree = tree
+				adapter := newProtoTreeAdapter(tree)
+				adapter.SetWindow(parentWindow) // Устанавливаем окно для диалогов
+				newTreeWidget := widget.NewTree(adapter.ChildUIDs, adapter.IsBranch, adapter.CreateNode, adapter.UpdateNode)
+				newTreeWidget.OpenBranch("root")
+				treeWidget = newTreeWidget
+				newScrollContainer := container.NewScroll(newTreeWidget)
+				treeScrollContainer = newScrollContainer
+				newBorder := container.NewPadded(newScrollContainer)
+				if browserTabs != nil {
+					browserTabs.UpdateTabContent(container.NewPadded(newBorder))
+				}
+				log.Printf("Schema applied successfully, tree updated")
+			}, parentWindow)
+
+			if lastDir := dialogState.getLastSchemaDir(); lastDir != nil {
+				fileDialog.SetLocation(lastDir)
 			}
-			log.Printf("Schema applied successfully, tree updated")
-		}, parentWindow)
 
-		if lastDir := dialogState.getLastSchemaDir(); lastDir != nil {
-			fileDialog.SetLocation(lastDir)
-		}
-
-		fileDialog.Resize(dialogState.getDialogSize())
-		fileDialog.Show()
+			fileDialog.Resize(dialogState.getDialogSize())
+			fileDialog.Show()
 		}
 		toolbarMgr.SetApplySchemaCallback(applySchemaCallback)
 
 		saveCallback = func() {
-		if currentTree == nil {
-			dialog.ShowInformation("Information", "Please open a proto file first", parentWindow)
-			return
-		}
-
-		saveDialog := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
-			if err != nil {
-				log.Printf("Save dialog error: %v", err)
-				dialog.ShowError(err, parentWindow)
-				return
-			}
-			if writer == nil {
-				return
-			}
-			defer writer.Close()
-
-			currentFilePath = writer.URI().Path()
-
-			if browserTabs != nil {
-				browserTabs.SetTabFilePath(currentFilePath)
-				fileName := filepath.Base(currentFilePath)
-				browserTabs.UpdateTabTitle(fileName)
-			}
-
-			dialogState.setLastSaveDir(writer.URI())
-
-			serializer := protobuf.NewSerializer(parser.GetProtocPath())
-			binaryData, err := serializer.SerializeRaw(currentTree)
-			if err != nil {
-				dialog.ShowError(fmt.Errorf("serialization error: %w", err), parentWindow)
+			if currentTree == nil {
+				dialog.ShowInformation("Information", "Please open a proto file first", parentWindow)
 				return
 			}
 
-			if _, err := writer.Write(binaryData); err != nil {
-				dialog.ShowError(fmt.Errorf("write error: %w", err), parentWindow)
-				return
+			saveDialog := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
+				if err != nil {
+					log.Printf("Save dialog error: %v", err)
+					dialog.ShowError(err, parentWindow)
+					return
+				}
+				if writer == nil {
+					return
+				}
+				defer writer.Close()
+
+				currentFilePath = writer.URI().Path()
+
+				if browserTabs != nil {
+					browserTabs.SetTabFilePath(currentFilePath)
+					fileName := filepath.Base(currentFilePath)
+					browserTabs.UpdateTabTitle(fileName)
+				}
+
+				dialogState.setLastSaveDir(writer.URI())
+
+				serializer := protobuf.NewSerializer(parser.GetProtocPath())
+				binaryData, err := serializer.SerializeRaw(currentTree)
+				if err != nil {
+					dialog.ShowError(fmt.Errorf("serialization error: %w", err), parentWindow)
+					return
+				}
+
+				if _, err := writer.Write(binaryData); err != nil {
+					dialog.ShowError(fmt.Errorf("write error: %w", err), parentWindow)
+					return
+				}
+
+				dialog.ShowInformation("Success", "Proto file saved", parentWindow)
+				log.Printf("Proto file saved: %s", currentFilePath)
+			}, parentWindow)
+
+			if lastDir := dialogState.getLastSaveDir(); lastDir != nil {
+				saveDialog.SetLocation(lastDir)
+			} else if currentFilePath != "" {
+				dirPath := filepath.Dir(currentFilePath)
+				uri := storage.NewFileURI(dirPath)
+				if listableURI, err := storage.ListerForURI(uri); err == nil {
+					saveDialog.SetLocation(listableURI)
+				}
 			}
 
-			dialog.ShowInformation("Success", "Proto file saved", parentWindow)
-			log.Printf("Proto file saved: %s", currentFilePath)
-		}, parentWindow)
-
-		if lastDir := dialogState.getLastSaveDir(); lastDir != nil {
-			saveDialog.SetLocation(lastDir)
-		} else if currentFilePath != "" {
-			dirPath := filepath.Dir(currentFilePath)
-			uri := storage.NewFileURI(dirPath)
-			if listableURI, err := storage.ListerForURI(uri); err == nil {
-				saveDialog.SetLocation(listableURI)
-			}
-		}
-
-		saveDialog.Resize(dialogState.getDialogSize())
-		saveDialog.Show()
+			saveDialog.Resize(dialogState.getDialogSize())
+			saveDialog.Show()
 		}
 		toolbarMgr.SetSaveCallback(saveCallback)
 
 		exportJSONCallback = func() {
-		if currentTree == nil {
-			dialog.ShowInformation("Information", "Please open a proto file first", parentWindow)
-			return
-		}
+			if currentTree == nil {
+				dialog.ShowInformation("Information", "Please open a proto file first", parentWindow)
+				return
+			}
 
-		jsonData, err := currentTree.ToJSON()
-		if err != nil {
-			dialog.ShowError(fmt.Errorf("export error: %w", err), parentWindow)
-			return
-		}
-
-		fileDialog := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
+			jsonData, err := currentTree.ToJSON()
 			if err != nil {
-				dialog.ShowError(err, parentWindow)
-				return
-			}
-			if writer == nil {
-				return
-			}
-			defer writer.Close()
-
-			dialogState.setLastSaveDir(writer.URI())
-
-			if _, err := writer.Write(jsonData); err != nil {
-				dialog.ShowError(fmt.Errorf("write error: %w", err), parentWindow)
+				dialog.ShowError(fmt.Errorf("export error: %w", err), parentWindow)
 				return
 			}
 
-			dialog.ShowInformation("Success", "JSON file saved", parentWindow)
-		}, parentWindow)
+			fileDialog := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
+				if err != nil {
+					dialog.ShowError(err, parentWindow)
+					return
+				}
+				if writer == nil {
+					return
+				}
+				defer writer.Close()
 
-		if lastDir := dialogState.getLastSaveDir(); lastDir != nil {
-			fileDialog.SetLocation(lastDir)
-		}
+				dialogState.setLastSaveDir(writer.URI())
 
-		fileDialog.Resize(dialogState.getDialogSize())
-		fileDialog.Show()
+				if _, err := writer.Write(jsonData); err != nil {
+					dialog.ShowError(fmt.Errorf("write error: %w", err), parentWindow)
+					return
+				}
+
+				dialog.ShowInformation("Success", "JSON file saved", parentWindow)
+			}, parentWindow)
+
+			if lastDir := dialogState.getLastSaveDir(); lastDir != nil {
+				fileDialog.SetLocation(lastDir)
+			}
+
+			fileDialog.Resize(dialogState.getDialogSize())
+			fileDialog.Show()
 		}
 		toolbarMgr.SetExportJSONCallback(exportJSONCallback)
 
+		exportSchemaCallback = func() {
+			if currentTree == nil {
+				dialog.ShowInformation("Information", "Please open a proto file first", parentWindow)
+				return
+			}
+
+			serializer := protobuf.NewSerializer(parser.GetProtocPath())
+			protoContent := serializer.GenerateProtoSchema(currentTree)
+
+			fileDialog := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
+				if err != nil {
+					dialog.ShowError(err, parentWindow)
+					return
+				}
+				if writer == nil {
+					return
+				}
+				defer writer.Close()
+
+				dialogState.setLastSaveDir(writer.URI())
+
+				if _, err := writer.Write([]byte(protoContent)); err != nil {
+					dialog.ShowError(fmt.Errorf("write error: %w", err), parentWindow)
+					return
+				}
+
+				dialog.ShowInformation("Success", "Proto schema file saved", parentWindow)
+			}, parentWindow)
+
+			if lastDir := dialogState.getLastSaveDir(); lastDir != nil {
+				fileDialog.SetLocation(lastDir)
+			} else if currentFilePath != "" {
+				dirPath := filepath.Dir(currentFilePath)
+				uri := storage.NewFileURI(dirPath)
+				if listableURI, err := storage.ListerForURI(uri); err == nil {
+					fileDialog.SetLocation(listableURI)
+				}
+			}
+
+			fileDialog.Resize(dialogState.getDialogSize())
+			fileDialog.Show()
+		}
+		toolbarMgr.SetExportSchemaCallback(exportSchemaCallback)
+
 		if browserTabs != nil {
 			callbacks := &toolbarCallbacks{
-				openCallback:        openCallback,
-				saveCallback:        saveCallback,
-				applySchemaCallback: applySchemaCallback,
-				exportJSONCallback:  exportJSONCallback,
+				openCallback:         openCallback,
+				saveCallback:         saveCallback,
+				applySchemaCallback:  applySchemaCallback,
+				exportJSONCallback:   exportJSONCallback,
+				exportSchemaCallback: exportSchemaCallback,
 			}
 			browserTabs.SetCurrentTabToolbarCallbacks(callbacks)
 		}

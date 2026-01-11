@@ -23,10 +23,11 @@ type tabData struct {
 }
 
 type toolbarCallbacks struct {
-	openCallback        func()
-	saveCallback        func()
-	applySchemaCallback func()
-	exportJSONCallback  func()
+	openCallback         func()
+	saveCallback         func()
+	applySchemaCallback  func()
+	exportJSONCallback   func()
+	exportSchemaCallback func()
 }
 
 func newTabManager() *tabManager {
@@ -115,6 +116,9 @@ func (tm *tabManager) selectTabWithoutSave(index int) {
 			}
 			if callbacks.exportJSONCallback != nil {
 				tm.toolbarMgr.SetExportJSONCallback(callbacks.exportJSONCallback)
+			}
+			if callbacks.exportSchemaCallback != nil {
+				tm.toolbarMgr.SetExportSchemaCallback(callbacks.exportSchemaCallback)
 			}
 		}
 		tm.Refresh()
