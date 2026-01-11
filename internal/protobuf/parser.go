@@ -300,7 +300,7 @@ func convertHexFloatToDecimal(hexStr string) string {
 	if err != nil {
 		return hexStr
 	}
-	
+
 	floatValue := math.Float64frombits(bits)
 	return strconv.FormatFloat(floatValue, 'g', -1, 64)
 }
@@ -311,18 +311,460 @@ func parseSignedNumber(s string) string {
 	if err != nil {
 		return s
 	}
-	
+
 	const maxInt64 = uint64(1) << 63
 	if unum >= maxInt64 {
 		signedNum := int64(unum)
 		return fmt.Sprintf("%d", signedNum)
 	}
-	
+
 	return s
 }
 
+type schemaFieldInfo struct {
+	fieldNum   int
+	fieldName  string
+	fieldType  string
+	isRepeated bool
+	isRequired bool
+	isOptional bool
+}
+
+type schemaMessageInfo struct {
+	messageName string
+	fields      []*schemaFieldInfo
+	messages    map[string]*schemaMessageInfo
+}
+
 func (p *Parser) ApplySchema(tree *TreeNode, schemaPath string) (*TreeNode, error) {
+	schemaContent, err := os.ReadFile(schemaPath)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка чтения схемы: %w", err)
+	}
+
+	schema, err := p.parseProtoSchema(string(schemaContent))
+	if err != nil {
+		return nil, fmt.Errorf("ошибка парсинга схемы: %w", err)
+	}
+
+	if len(schema) == 0 {
+		return nil, fmt.Errorf("схема не содержит сообщений")
+	}
+
+	rootMessage := findRootMessage(schema)
+	if rootMessage == nil {
+		return nil, fmt.Errorf("не удалось найти корневое сообщение в схеме")
+	}
+
+	if err := p.validateSchema(tree, rootMessage); err != nil {
+		return nil, err
+	}
+
+	p.applySchemaToTree(tree, rootMessage, schema)
+
 	return tree, nil
+}
+
+func findRootMessage(messages map[string]*schemaMessageInfo) *schemaMessageInfo {
+	for _, msg := range messages {
+		if msg.messageName == "Message" || msg.messageName == "Root" || msg.messageName == "RootMessage" {
+			return msg
+		}
+	}
+
+	for _, msg := range messages {
+		return msg
+	}
+	return nil
+}
+
+func (p *Parser) parseProtoSchema(content string) (map[string]*schemaMessageInfo, error) {
+	messages := make(map[string]*schemaMessageInfo)
+	lines := strings.Split(content, "\n")
+
+	var currentMessage *schemaMessageInfo
+	var messageStack []*schemaMessageInfo
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "//") || strings.HasPrefix(line, "syntax") || strings.HasPrefix(line, "package") || strings.HasPrefix(line, "import") {
+			continue
+		}
+
+		if strings.HasPrefix(line, "message ") {
+			parts := strings.Fields(line)
+			if len(parts) < 2 {
+				continue
+			}
+			messageName := strings.TrimSuffix(strings.TrimSuffix(parts[1], "{"), " ")
+
+			msg := &schemaMessageInfo{
+				messageName: messageName,
+				fields:      make([]*schemaFieldInfo, 0),
+				messages:    make(map[string]*schemaMessageInfo),
+			}
+
+			if currentMessage != nil {
+				messageStack = append(messageStack, currentMessage)
+				currentMessage.messages[messageName] = msg
+				// Добавляем вложенное сообщение в общий словарь для доступа из других мест
+				messages[messageName] = msg
+			} else {
+				messages[messageName] = msg
+			}
+
+			currentMessage = msg
+			continue
+		}
+
+		if line == "}" {
+			if len(messageStack) > 0 {
+				currentMessage = messageStack[len(messageStack)-1]
+				messageStack = messageStack[:len(messageStack)-1]
+			} else {
+				currentMessage = nil
+			}
+			continue
+		}
+
+		if currentMessage != nil {
+			field := p.parseFieldLine(line)
+			if field != nil {
+				currentMessage.fields = append(currentMessage.fields, field)
+			}
+		}
+	}
+
+	return messages, nil
+}
+
+func (p *Parser) parseFieldLine(line string) *schemaFieldInfo {
+	line = strings.TrimSpace(line)
+	if line == "" || strings.HasPrefix(line, "//") {
+		return nil
+	}
+
+	parts := strings.Fields(line)
+	if len(parts) < 4 {
+		return nil
+	}
+
+	isRepeated := false
+	isRequired := false
+	isOptional := false
+
+	i := 0
+	if parts[i] == "repeated" {
+		isRepeated = true
+		i++
+	} else if parts[i] == "required" {
+		isRequired = true
+		i++
+	} else if parts[i] == "optional" {
+		isOptional = true
+		i++
+	}
+
+	if i >= len(parts) {
+		return nil
+	}
+
+	fieldType := parts[i]
+	i++
+
+	if i >= len(parts) {
+		return nil
+	}
+
+	fieldName := parts[i]
+	i++
+
+	if i >= len(parts) {
+		return nil
+	}
+
+	if parts[i] != "=" {
+		return nil
+	}
+	i++
+
+	if i >= len(parts) {
+		return nil
+	}
+
+	fieldNumStr := strings.TrimSuffix(parts[i], ";")
+	fieldNumStr = strings.TrimSpace(fieldNumStr)
+	fieldNum, err := strconv.Atoi(fieldNumStr)
+	if err != nil {
+		return nil
+	}
+
+	if !isRequired && !isOptional && !isRepeated {
+		isOptional = true
+	}
+
+	return &schemaFieldInfo{
+		fieldNum:   fieldNum,
+		fieldName:  fieldName,
+		fieldType:  fieldType,
+		isRepeated: isRepeated,
+		isRequired: isRequired,
+		isOptional: isOptional,
+	}
+}
+
+func (p *Parser) validateSchema(tree *TreeNode, schema *schemaMessageInfo) error {
+	treeFields := make(map[int]bool)
+	p.collectFieldNums(tree, treeFields)
+
+	for _, field := range schema.fields {
+		if field.isRequired && !treeFields[field.fieldNum] {
+			return fmt.Errorf("отсутствует обязательное поле '%s' (номер поля: %d)", field.fieldName, field.fieldNum)
+		}
+	}
+
+	return nil
+}
+
+func (p *Parser) collectFieldNums(node *TreeNode, fieldNums map[int]bool) {
+	if node.FieldNum > 0 {
+		fieldNums[node.FieldNum] = true
+	}
+
+	for _, child := range node.Children {
+		p.collectFieldNums(child, fieldNums)
+	}
+}
+
+func (p *Parser) applySchemaToTree(tree *TreeNode, schema *schemaMessageInfo, allMessages map[string]*schemaMessageInfo) {
+	fieldMap := make(map[int]*schemaFieldInfo)
+	for _, field := range schema.fields {
+		fieldMap[field.fieldNum] = field
+	}
+
+	for _, child := range tree.Children {
+		if fieldInfo, ok := fieldMap[child.FieldNum]; ok {
+			oldType := child.Type
+			child.Name = fieldInfo.fieldName
+
+			newType := p.mapProtoTypeToUIType(fieldInfo.fieldType)
+			if p.canConvertType(oldType, newType, child.Value) {
+				child.Type = newType
+				child.Value = p.convertValue(child.Value, oldType, newType)
+			}
+
+			child.IsRepeated = fieldInfo.isRepeated
+
+			// Если тип поля - это тип сообщения, обновляем тип поля
+			if p.isMessageTypeName(fieldInfo.fieldType) {
+				child.Type = fieldInfo.fieldType
+			}
+
+			// Применяем схему к вложенным сообщениям
+			if p.isMessageTypeName(fieldInfo.fieldType) || len(child.Children) > 0 {
+				if nestedSchema, ok := allMessages[fieldInfo.fieldType]; ok {
+					p.applySchemaToTree(child, nestedSchema, allMessages)
+				} else if nestedSchema, ok := schema.messages[fieldInfo.fieldType]; ok {
+					p.applySchemaToTree(child, nestedSchema, allMessages)
+				}
+			}
+		}
+	}
+}
+
+func (p *Parser) mapProtoTypeToUIType(protoType string) string {
+	switch protoType {
+	case "string", "bytes":
+		return "string"
+	case "int32", "sint32", "sfixed32":
+		return "int32"
+	case "int64", "sint64", "sfixed64":
+		return "int64"
+	case "uint32", "fixed32":
+		return "uint32"
+	case "uint64", "fixed64":
+		return "uint64"
+	case "bool":
+		return "bool"
+	case "float":
+		return "float"
+	case "double":
+		return "double"
+	default:
+		// Если это не базовый тип, проверяем, является ли это типом сообщения
+		// Типы сообщений могут быть как "Message1", так и "message_1"
+		if p.isMessageTypeName(protoType) {
+			return protoType
+		}
+		return "string"
+	}
+}
+
+func (p *Parser) isMessageTypeName(typeName string) bool {
+	// Проверяем, является ли тип именем сообщения (не базовым типом)
+	basicTypes := map[string]bool{
+		"string": true, "bytes": true,
+		"int32": true, "sint32": true, "sfixed32": true,
+		"int64": true, "sint64": true, "sfixed64": true,
+		"uint32": true, "fixed32": true,
+		"uint64": true, "fixed64": true,
+		"bool":  true,
+		"float": true, "double": true,
+	}
+
+	if basicTypes[typeName] {
+		return false
+	}
+
+	// Если это не базовый тип, то это скорее всего тип сообщения
+	return true
+}
+
+func (p *Parser) canConvertType(oldType, newType string, value interface{}) bool {
+	if oldType == newType {
+		return true
+	}
+
+	if isMessageType(oldType) && isMessageType(newType) {
+		return true
+	}
+
+	if isMessageType(oldType) || isMessageType(newType) {
+		return false
+	}
+
+	if value == nil {
+		return true
+	}
+
+	valueStr := fmt.Sprintf("%v", value)
+
+	if oldType == "string" && newType == "string" {
+		return true
+	}
+
+	if (oldType == "int32" || oldType == "int64" || oldType == "uint32" || oldType == "uint64" || oldType == "sint32" || oldType == "sint64") &&
+		(newType == "int32" || newType == "int64" || newType == "uint32" || newType == "uint64" || newType == "sint32" || newType == "sint64") {
+		return p.isCompatibleIntegerType(oldType, newType, valueStr)
+	}
+
+	if (oldType == "float" || oldType == "double") && (newType == "float" || newType == "double") {
+		return true
+	}
+
+	if (oldType == "int32" || oldType == "int64" || oldType == "uint32" || oldType == "uint64" || oldType == "sint32" || oldType == "sint64") &&
+		(newType == "float" || newType == "double") {
+		return true
+	}
+
+	if (oldType == "float" || oldType == "double") &&
+		(newType == "int32" || newType == "int64" || newType == "uint32" || newType == "uint64" || newType == "sint32" || newType == "sint64") {
+		if _, err := strconv.ParseFloat(valueStr, 64); err == nil {
+			f, _ := strconv.ParseFloat(valueStr, 64)
+			return float64(int64(f)) == f
+		}
+		return false
+	}
+
+	if oldType == "bool" && (newType == "int32" || newType == "int64") {
+		return true
+	}
+
+	if (oldType == "int32" || oldType == "int64") && newType == "bool" {
+		return valueStr == "0" || valueStr == "1" || valueStr == "true" || valueStr == "false"
+	}
+
+	return false
+}
+
+func (p *Parser) isCompatibleIntegerType(oldType, newType, valueStr string) bool {
+	if oldType == newType {
+		return true
+	}
+
+	val, err := strconv.ParseInt(valueStr, 10, 64)
+	if err != nil {
+		if _, uerr := strconv.ParseUint(valueStr, 10, 64); uerr == nil {
+			if strings.Contains(newType, "uint") || strings.Contains(newType, "int") {
+				return true
+			}
+			return false
+		}
+		return false
+	}
+
+	if strings.Contains(newType, "uint") {
+		return val >= 0
+	}
+
+	if newType == "int32" || newType == "sint32" {
+		return val >= -2147483648 && val <= 2147483647
+	}
+
+	if newType == "uint32" {
+		return val >= 0 && val <= 4294967295
+	}
+
+	return true
+}
+
+func (p *Parser) convertValue(value interface{}, oldType, newType string) interface{} {
+	if value == nil {
+		return nil
+	}
+
+	if oldType == newType {
+		return value
+	}
+
+	valueStr := fmt.Sprintf("%v", value)
+
+	if (oldType == "int32" || oldType == "int64" || oldType == "uint32" || oldType == "uint64" || oldType == "sint32" || oldType == "sint64") &&
+		(newType == "float" || newType == "double") {
+		if val, err := strconv.ParseInt(valueStr, 10, 64); err == nil {
+			return fmt.Sprintf("%d.0", val)
+		}
+		if val, err := strconv.ParseUint(valueStr, 10, 64); err == nil {
+			return fmt.Sprintf("%d.0", val)
+		}
+		return valueStr
+	}
+
+	if (oldType == "float" || oldType == "double") &&
+		(newType == "int32" || newType == "int64" || newType == "uint32" || newType == "uint64" || newType == "sint32" || newType == "sint64") {
+		if f, err := strconv.ParseFloat(valueStr, 64); err == nil {
+			if newType == "uint32" || newType == "uint64" {
+				if f >= 0 {
+					return fmt.Sprintf("%.0f", f)
+				}
+				return "0"
+			}
+			return fmt.Sprintf("%.0f", f)
+		}
+		return valueStr
+	}
+
+	if oldType == "bool" && (newType == "int32" || newType == "int64") {
+		if b, ok := value.(bool); ok {
+			if b {
+				return "1"
+			}
+			return "0"
+		}
+		if valueStr == "true" || valueStr == "1" {
+			return "1"
+		}
+		return "0"
+	}
+
+	if (oldType == "int32" || oldType == "int64") && newType == "bool" {
+		if valueStr == "1" {
+			return true
+		}
+		return false
+	}
+
+	return value
 }
 
 // GetProtocPath возвращает путь к protoc (для использования в тестах и других компонентах)

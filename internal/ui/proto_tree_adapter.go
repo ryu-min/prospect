@@ -1074,6 +1074,27 @@ func (a *protoTreeAdapter) isMessageType(typeName string) bool {
 	if strings.HasPrefix(typeName, "message_") {
 		return true
 	}
+	// Проверяем, является ли тип именем сообщения (не базовым типом)
+	basicTypes := map[string]bool{
+		"string": true, "bytes": true,
+		"int32": true, "sint32": true, "sfixed32": true,
+		"int64": true, "sint64": true, "sfixed64": true,
+		"uint32": true, "fixed32": true,
+		"uint64": true, "fixed64": true,
+		"bool": true,
+		"float": true, "double": true,
+	}
+	
+	// Если это не базовый тип, то это скорее всего тип сообщения
+	if !basicTypes[typeName] {
+		// Считаем типом сообщения, если имя начинается с заглавной буквы
+		// (соглашение protobuf для имен сообщений)
+		// Не вызываем findMessageByName здесь, чтобы избежать бесконечной рекурсии
+		if len(typeName) > 0 && strings.ToUpper(typeName[:1]) == typeName[:1] {
+			return true
+		}
+	}
+	
 	return false
 }
 
