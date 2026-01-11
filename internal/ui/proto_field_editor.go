@@ -76,11 +76,11 @@ func (r *protoFieldEditorRenderer) Layout(size fyne.Size) {
 	r.typeCombo.Resize(fyne.NewSize(float32(typeColumnWidth), r.typeCombo.MinSize().Height))
 
 	if r.widget.showEntry {
-		entryX := float32(nameColumnWidth + typeColumnWidth + columnSpacing*2)
-		entryWidth := size.Width - entryX
-		entryPos := fyne.NewPos(entryX, (size.Height-r.entry.MinSize().Height)/2)
-		r.entry.Move(entryPos)
-		r.entry.Resize(fyne.NewSize(entryWidth, r.entry.MinSize().Height))
+	entryX := float32(nameColumnWidth + typeColumnWidth + columnSpacing*2)
+	entryWidth := size.Width - entryX
+	entryPos := fyne.NewPos(entryX, (size.Height-r.entry.MinSize().Height)/2)
+	r.entry.Move(entryPos)
+	r.entry.Resize(fyne.NewSize(entryWidth, r.entry.MinSize().Height))
 	}
 }
 
@@ -92,7 +92,7 @@ func (r *protoFieldEditorRenderer) MinSize() fyne.Size {
 	height := fyne.Max(nameSize.Height, typeSize.Height)
 
 	if r.widget.showEntry {
-		entrySize := r.entry.MinSize()
+	entrySize := r.entry.MinSize()
 		width += float32(int(entrySize.Width) + columnSpacing)
 		height = fyne.Max(height, entrySize.Height)
 	}

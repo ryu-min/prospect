@@ -336,13 +336,32 @@ type schemaMessageInfo struct {
 	messages    map[string]*schemaMessageInfo
 }
 
-func (p *Parser) ApplySchema(tree *TreeNode, schemaPath string) (*TreeNode, error) {
+// ParseSchemaFile парсит proto файл и возвращает список имен сообщений верхнего уровня
+func (p *Parser) ParseSchemaFile(schemaPath string) ([]string, error) {
 	schemaContent, err := os.ReadFile(schemaPath)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка чтения схемы: %w", err)
 	}
 
-	schema, err := p.parseProtoSchema(string(schemaContent))
+	_, topLevelMessages, err := p.parseProtoSchema(string(schemaContent))
+	if err != nil {
+		return nil, fmt.Errorf("ошибка парсинга схемы: %w", err)
+	}
+
+	return topLevelMessages, nil
+}
+
+func (p *Parser) ApplySchema(tree *TreeNode, schemaPath string) (*TreeNode, error) {
+	return p.ApplySchemaWithMessage(tree, schemaPath, "")
+}
+
+func (p *Parser) ApplySchemaWithMessage(tree *TreeNode, schemaPath string, messageName string) (*TreeNode, error) {
+	schemaContent, err := os.ReadFile(schemaPath)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка чтения схемы: %w", err)
+	}
+
+	schema, topLevelMessages, err := p.parseProtoSchema(string(schemaContent))
 	if err != nil {
 		return nil, fmt.Errorf("ошибка парсинга схемы: %w", err)
 	}
@@ -351,7 +370,22 @@ func (p *Parser) ApplySchema(tree *TreeNode, schemaPath string) (*TreeNode, erro
 		return nil, fmt.Errorf("схема не содержит сообщений")
 	}
 
-	rootMessage := findRootMessage(schema)
+	var rootMessage *schemaMessageInfo
+	if messageName != "" {
+		// Используем указанное сообщение
+		rootMessage = schema[messageName]
+		if rootMessage == nil {
+			return nil, fmt.Errorf("сообщение '%s' не найдено в схеме", messageName)
+		}
+	} else {
+		// Автоматический выбор: если сообщение одно, используем его, иначе ищем по приоритету
+		if len(topLevelMessages) == 1 {
+			rootMessage = schema[topLevelMessages[0]]
+		} else {
+			rootMessage = findRootMessage(schema, topLevelMessages)
+		}
+	}
+
 	if rootMessage == nil {
 		return nil, fmt.Errorf("не удалось найти корневое сообщение в схеме")
 	}
@@ -365,21 +399,33 @@ func (p *Parser) ApplySchema(tree *TreeNode, schemaPath string) (*TreeNode, erro
 	return tree, nil
 }
 
-func findRootMessage(messages map[string]*schemaMessageInfo) *schemaMessageInfo {
-	for _, msg := range messages {
-		if msg.messageName == "Message" || msg.messageName == "Root" || msg.messageName == "RootMessage" {
-			return msg
+func findRootMessage(messages map[string]*schemaMessageInfo, topLevelMessages []string) *schemaMessageInfo {
+	// Сначала ищем сообщения с приоритетными именами среди сообщений верхнего уровня
+	priorityNames := []string{"Message", "Root", "RootMessage"}
+	for _, priorityName := range priorityNames {
+		for _, topLevelName := range topLevelMessages {
+			if topLevelName == priorityName {
+				if msg, exists := messages[priorityName]; exists {
+					return msg
+				}
+			}
 		}
 	}
 
-	for _, msg := range messages {
-		return msg
+	// Если не найдено, возвращаем первое сообщение верхнего уровня
+	if len(topLevelMessages) > 0 {
+		return messages[topLevelMessages[0]]
 	}
+
 	return nil
 }
 
-func (p *Parser) parseProtoSchema(content string) (map[string]*schemaMessageInfo, error) {
+// parseProtoSchema парсит proto схему и возвращает:
+// 1. Словарь всех сообщений (включая вложенные)
+// 2. Список имен сообщений верхнего уровня
+func (p *Parser) parseProtoSchema(content string) (map[string]*schemaMessageInfo, []string, error) {
 	messages := make(map[string]*schemaMessageInfo)
+	topLevelMessages := make([]string, 0)
 	lines := strings.Split(content, "\n")
 
 	var currentMessage *schemaMessageInfo
@@ -405,19 +451,22 @@ func (p *Parser) parseProtoSchema(content string) (map[string]*schemaMessageInfo
 			}
 
 			if currentMessage != nil {
+				// Это вложенное сообщение
 				messageStack = append(messageStack, currentMessage)
 				currentMessage.messages[messageName] = msg
 				// Добавляем вложенное сообщение в общий словарь для доступа из других мест
 				messages[messageName] = msg
 			} else {
+				// Это сообщение верхнего уровня
 				messages[messageName] = msg
+				topLevelMessages = append(topLevelMessages, messageName)
 			}
 
 			currentMessage = msg
 			continue
 		}
 
-		if line == "}" {
+		if strings.HasPrefix(line, "}") {
 			if len(messageStack) > 0 {
 				currentMessage = messageStack[len(messageStack)-1]
 				messageStack = messageStack[:len(messageStack)-1]
@@ -435,7 +484,7 @@ func (p *Parser) parseProtoSchema(content string) (map[string]*schemaMessageInfo
 		}
 	}
 
-	return messages, nil
+	return messages, topLevelMessages, nil
 }
 
 func (p *Parser) parseFieldLine(line string) *schemaFieldInfo {
@@ -547,24 +596,27 @@ func (p *Parser) applySchemaToTree(tree *TreeNode, schema *schemaMessageInfo, al
 			oldType := child.Type
 			child.Name = fieldInfo.fieldName
 
-			newType := p.mapProtoTypeToUIType(fieldInfo.fieldType)
-			if p.canConvertType(oldType, newType, child.Value) {
-				child.Type = newType
-				child.Value = p.convertValue(child.Value, oldType, newType)
+			// Если тип поля - это тип сообщения, устанавливаем тип поля сразу
+			if p.isMessageTypeName(fieldInfo.fieldType) {
+				child.Type = fieldInfo.fieldType
+			} else {
+				// Для не-сообщений применяем обычное преобразование типа
+				newType := p.mapProtoTypeToUIType(fieldInfo.fieldType)
+				if p.canConvertType(oldType, newType, child.Value) {
+					child.Type = newType
+					child.Value = p.convertValue(child.Value, oldType, newType)
+				}
 			}
 
 			child.IsRepeated = fieldInfo.isRepeated
 
-			// Если тип поля - это тип сообщения, обновляем тип поля
-			if p.isMessageTypeName(fieldInfo.fieldType) {
-				child.Type = fieldInfo.fieldType
-			}
-
 			// Применяем схему к вложенным сообщениям
-			if p.isMessageTypeName(fieldInfo.fieldType) || len(child.Children) > 0 {
-				if nestedSchema, ok := allMessages[fieldInfo.fieldType]; ok {
+			if p.isMessageTypeName(fieldInfo.fieldType) {
+				// Ищем схему вложенного сообщения сначала в schema.messages (локальные вложенные сообщения),
+				// затем в allMessages (все сообщения)
+				if nestedSchema, ok := schema.messages[fieldInfo.fieldType]; ok {
 					p.applySchemaToTree(child, nestedSchema, allMessages)
-				} else if nestedSchema, ok := schema.messages[fieldInfo.fieldType]; ok {
+				} else if nestedSchema, ok := allMessages[fieldInfo.fieldType]; ok {
 					p.applySchemaToTree(child, nestedSchema, allMessages)
 				}
 			}

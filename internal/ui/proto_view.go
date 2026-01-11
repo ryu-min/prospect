@@ -157,25 +157,79 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 				schemaPath := reader.URI().Path()
 				log.Printf("Applying schema: %s", schemaPath)
 
-				tree, err := parser.ApplySchema(currentTree, schemaPath)
+				// Получаем список сообщений верхнего уровня из схемы
+				messageNames, err := parser.ParseSchemaFile(schemaPath)
 				if err != nil {
-					dialog.ShowError(fmt.Errorf("error applying schema: %w", err), parentWindow)
+					dialog.ShowError(fmt.Errorf("error parsing schema file: %w", err), parentWindow)
 					return
 				}
 
-				currentTree = tree
-				adapter := newProtoTreeAdapter(tree)
-				adapter.SetWindow(parentWindow) // Устанавливаем окно для диалогов
-				newTreeWidget := widget.NewTree(adapter.ChildUIDs, adapter.IsBranch, adapter.CreateNode, adapter.UpdateNode)
-				newTreeWidget.OpenBranch("root")
-				treeWidget = newTreeWidget
-				newScrollContainer := container.NewScroll(newTreeWidget)
-				treeScrollContainer = newScrollContainer
-				newBorder := container.NewPadded(newScrollContainer)
-				if browserTabs != nil {
-					browserTabs.UpdateTabContent(container.NewPadded(newBorder))
+				if len(messageNames) == 0 {
+					dialog.ShowError(fmt.Errorf("schema file does not contain any top-level messages"), parentWindow)
+					return
 				}
-				log.Printf("Schema applied successfully, tree updated")
+
+				// Вспомогательная функция для применения схемы
+				applySchemaToTree := func(messageName string) {
+					tree, err := parser.ApplySchemaWithMessage(currentTree, schemaPath, messageName)
+					if err != nil {
+						dialog.ShowError(fmt.Errorf("error applying schema: %w", err), parentWindow)
+						return
+					}
+
+					currentTree = tree
+					adapter := newProtoTreeAdapter(tree)
+					adapter.SetWindow(parentWindow) // Устанавливаем окно для диалогов
+					newTreeWidget := widget.NewTree(adapter.ChildUIDs, adapter.IsBranch, adapter.CreateNode, adapter.UpdateNode)
+					newTreeWidget.OpenBranch("root")
+					treeWidget = newTreeWidget
+					newScrollContainer := container.NewScroll(newTreeWidget)
+					treeScrollContainer = newScrollContainer
+					newBorder := container.NewPadded(newScrollContainer)
+					if browserTabs != nil {
+						browserTabs.UpdateTabContent(container.NewPadded(newBorder))
+					}
+					log.Printf("Schema applied successfully with message '%s', tree updated", messageName)
+				}
+
+				// Если сообщение одно, используем его автоматически
+				if len(messageNames) == 1 {
+					selectedMessageName := messageNames[0]
+					log.Printf("Only one message found in schema, using: %s", selectedMessageName)
+					applySchemaToTree(selectedMessageName)
+					return
+				}
+
+				// Если сообщений несколько, показываем диалог выбора
+				selectedMessageName := messageNames[0] // Значение по умолчанию
+
+				selectWidget := widget.NewSelect(messageNames, func(selected string) {
+					selectedMessageName = selected
+				})
+				selectWidget.SetSelected(messageNames[0])
+
+				content := container.NewVBox(
+					widget.NewLabel("Выберите сообщение для применения схемы:"),
+					selectWidget,
+				)
+
+				confirmDialog := dialog.NewCustomConfirm(
+					"Выбор сообщения",
+					"Применить",
+					"Отмена",
+					content,
+					func(confirmed bool) {
+						if !confirmed {
+							return
+						}
+
+						applySchemaToTree(selectedMessageName)
+					},
+					parentWindow,
+				)
+
+				confirmDialog.Resize(fyne.NewSize(400, 150))
+				confirmDialog.Show()
 			}, parentWindow)
 
 			if lastDir := dialogState.getLastSchemaDir(); lastDir != nil {

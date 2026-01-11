@@ -388,3 +388,292 @@ message Message {
 	}
 }
 
+func TestApplySchema_NestedMessageType(t *testing.T) {
+	parser, err := NewParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	root := &TreeNode{
+		Name:     "root",
+		Type:     "message",
+		FieldNum: 0,
+		Children: make([]*TreeNode, 0),
+	}
+
+	messageField := &TreeNode{
+		Name:     "field_1",
+		Type:     "message_1",
+		FieldNum: 1,
+		Children: make([]*TreeNode, 0),
+	}
+
+	nestedField1 := &TreeNode{
+		Name:     "field_1",
+		Type:     "string",
+		FieldNum: 1,
+		Value:    "test",
+		Children: make([]*TreeNode, 0),
+	}
+	messageField.AddChild(nestedField1)
+
+	root.AddChild(messageField)
+
+	messageField2 := &TreeNode{
+		Name:     "field_3",
+		Type:     "message_2",
+		FieldNum: 3,
+		Children: make([]*TreeNode, 0),
+	}
+	root.AddChild(messageField2)
+
+	tempDir := t.TempDir()
+	schemaFile := filepath.Join(tempDir, "test.proto")
+	schemaContent := `syntax = "proto2";
+
+message Message {
+  optional Message1 first_field = 1;
+  message Message1 {
+    optional string field_1 = 1;
+    optional string field_2 = 2;
+  }
+  optional Message1 field_3 = 3;
+}`
+
+	if err := os.WriteFile(schemaFile, []byte(schemaContent), 0644); err != nil {
+		t.Fatalf("Failed to write schema file: %v", err)
+	}
+
+	_, err = parser.ApplySchema(root, schemaFile)
+	if err != nil {
+		t.Fatalf("Failed to apply schema: %v", err)
+	}
+
+	foundFirstField := false
+	foundField3 := false
+	for _, child := range root.Children {
+		if child.FieldNum == 1 {
+			if child.Name != "first_field" {
+				t.Errorf("Expected field name to be 'first_field', got '%s'", child.Name)
+			}
+			if child.Type != "Message1" {
+				t.Errorf("Expected field type to be 'Message1', got '%s'", child.Type)
+			}
+			foundFirstField = true
+		} else if child.FieldNum == 3 {
+			if child.Name != "field_3" {
+				t.Errorf("Expected field name to be 'field_3', got '%s'", child.Name)
+			}
+			if child.Type != "Message1" {
+				t.Errorf("Expected field type to be 'Message1', got '%s'", child.Type)
+			}
+			foundField3 = true
+		}
+	}
+
+	if !foundFirstField {
+		t.Error("Field 'first_field' not found")
+	}
+	if !foundField3 {
+		t.Error("Field 'field_3' not found")
+	}
+}
+
+func TestApplySchema_NestedMessageTypeWithSchema1(t *testing.T) {
+	parser, err := NewParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	root := &TreeNode{
+		Name:     "root",
+		Type:     "message",
+		FieldNum: 0,
+		Children: make([]*TreeNode, 0),
+	}
+
+	messageField := &TreeNode{
+		Name:     "field_1",
+		Type:     "message_1",
+		FieldNum: 1,
+		Children: make([]*TreeNode, 0),
+	}
+
+	nestedField1 := &TreeNode{
+		Name:     "field_1",
+		Type:     "string",
+		FieldNum: 1,
+		Value:    "test",
+		Children: make([]*TreeNode, 0),
+	}
+	messageField.AddChild(nestedField1)
+
+	root.AddChild(messageField)
+
+	messageField2 := &TreeNode{
+		Name:     "field_3",
+		Type:     "message_2",
+		FieldNum: 3,
+		Children: make([]*TreeNode, 0),
+	}
+	root.AddChild(messageField2)
+
+	messageField3 := &TreeNode{
+		Name:     "field_4",
+		Type:     "message_3",
+		FieldNum: 4,
+		Children: make([]*TreeNode, 0),
+	}
+	root.AddChild(messageField3)
+
+	tempDir := t.TempDir()
+	schemaFile := filepath.Join(tempDir, "test.proto")
+	schemaContent := `syntax = "proto2";
+
+message Message {
+  optional Message1 first_field = 1;
+  message Message1 {
+    optional string field_1 = 1;
+    optional string field_2 = 2;
+    optional int64 field_3 = 3;
+    optional bool field_4 = 4;
+  }
+  optional Message1 field_3 = 3;
+  optional Message1 field_4 = 4;
+  repeated string field_5 = 5;
+}`
+
+	if err := os.WriteFile(schemaFile, []byte(schemaContent), 0644); err != nil {
+		t.Fatalf("Failed to write schema file: %v", err)
+	}
+
+	_, err = parser.ApplySchema(root, schemaFile)
+	if err != nil {
+		t.Fatalf("Failed to apply schema: %v", err)
+	}
+
+	for _, child := range root.Children {
+		if child.FieldNum == 1 || child.FieldNum == 3 || child.FieldNum == 4 {
+			if child.Type != "Message1" {
+				t.Errorf("Field %d: Expected type to be 'Message1', got '%s'", child.FieldNum, child.Type)
+			}
+		}
+	}
+}
+
+func TestApplySchemaWithMessage_SingleMessage(t *testing.T) {
+	parser, err := NewParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	tmpDir := t.TempDir()
+	schemaFile := filepath.Join(tmpDir, "schema.proto")
+	schemaContent := `syntax = "proto2";
+
+message Person {
+  optional string name = 1;
+  optional int32 age = 2;
+}
+`
+
+	err = os.WriteFile(schemaFile, []byte(schemaContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write schema file: %v", err)
+	}
+
+	root := &TreeNode{
+		Name:     "root",
+		Type:     "message",
+		Children: make([]*TreeNode, 0),
+	}
+
+	tree, err := parser.ApplySchemaWithMessage(root, schemaFile, "")
+	if err != nil {
+		t.Fatalf("Failed to apply schema: %v", err)
+	}
+
+	if tree == nil {
+		t.Fatal("Tree is nil")
+	}
+}
+
+func TestApplySchemaWithMessage_MultipleMessages(t *testing.T) {
+	parser, err := NewParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	tmpDir := t.TempDir()
+	schemaFile := filepath.Join(tmpDir, "schema.proto")
+	schemaContent := `syntax = "proto2";
+
+message FirstMessage {
+  optional string field1 = 1;
+}
+
+message SecondMessage {
+  optional int32 field1 = 1;
+}
+
+message ThirdMessage {
+  optional bool field1 = 1;
+}
+`
+
+	err = os.WriteFile(schemaFile, []byte(schemaContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write schema file: %v", err)
+	}
+
+	root := &TreeNode{
+		Name:     "root",
+		Type:     "message",
+		Children: make([]*TreeNode, 0),
+	}
+
+	tree, err := parser.ApplySchemaWithMessage(root, schemaFile, "SecondMessage")
+	if err != nil {
+		t.Fatalf("Failed to apply schema: %v", err)
+	}
+
+	if tree == nil {
+		t.Fatal("Tree is nil")
+	}
+}
+
+func TestApplySchemaWithMessage_MessageNotFound(t *testing.T) {
+	parser, err := NewParser()
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	tmpDir := t.TempDir()
+	schemaFile := filepath.Join(tmpDir, "schema.proto")
+	schemaContent := `syntax = "proto2";
+
+message Person {
+  optional string name = 1;
+}
+`
+
+	err = os.WriteFile(schemaFile, []byte(schemaContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write schema file: %v", err)
+	}
+
+	root := &TreeNode{
+		Name:     "root",
+		Type:     "message",
+		Children: make([]*TreeNode, 0),
+	}
+
+	_, err = parser.ApplySchemaWithMessage(root, schemaFile, "NonExistentMessage")
+	if err == nil {
+		t.Fatal("Expected error when message not found, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "не найдено") && !strings.Contains(err.Error(), "not found") {
+		t.Errorf("Expected error about message not found, got: %v", err)
+	}
+}

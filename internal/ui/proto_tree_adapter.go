@@ -111,10 +111,8 @@ func (a *protoTreeAdapter) UpdateNode(uid widget.TreeNodeID, branch bool, obj fy
 		editWidget.uid = actualUID
 		a.editWidgets[actualUID] = editWidget
 
-		var nameText string
-		if a.isMessageType(node.Type) {
-			nameText = node.Name
-		} else {
+		nameText := node.Name
+		if nameText == "" {
 			nameText = fmt.Sprintf("field_%d", node.FieldNum)
 		}
 		editWidget.nameLabel.SetText(nameText)
@@ -286,12 +284,12 @@ func (a *protoTreeAdapter) validateValue(value string, fieldType string) bool {
 		if strings.HasSuffix(trimmed, ".") {
 			trimmed = strings.TrimSuffix(trimmed, ".")
 			if trimmed == "" || trimmed == "-" {
-				return true
-			}
+					return true
+				}
 		}
 		_, err := strconv.ParseFloat(trimmed, 64)
 		if err != nil {
-			return false
+				return false
 		}
 		return true
 	case "bool":
@@ -334,14 +332,14 @@ func (a *protoTreeAdapter) detectTypeChange(oldType string, valueStr string) (ne
 		if errFloat == nil {
 			return "float", true
 		}
-		return "string", true
-	}
+			return "string", true
+		}
 
 	if oldType == "uint32" || oldType == "uint64" {
 		_, err := strconv.ParseUint(trimmed, 10, 64)
 		if err == nil {
 			return oldType, false
-		}
+	}
 		if trimmed == "." || trimmed == "-." {
 			return oldType, false
 		}
@@ -442,7 +440,7 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 
 	isMessageType := a.isMessageType(newType)
 	isOldMessageType := a.isMessageType(oldType)
-
+	
 	if isMessageType && !isOldMessageType {
 		parentMessage := a.findParentMessage(node)
 
@@ -455,7 +453,7 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 					newType,
 					len(affectedFields),
 					func() {
-						sourceMessage := a.findMessageByName(newType)
+		sourceMessage := a.findMessageByName(newType)
 						var finalMessageType string
 
 						if sourceMessage != nil {
@@ -547,22 +545,22 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 			}
 		} else {
 			sourceMessage := a.findMessageByName(newType)
-			if sourceMessage != nil {
-				node.Type = newType
-				if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
-					node.Name = fmt.Sprintf("field_%d", node.FieldNum)
-				}
-				node.Value = nil
-				node.Children = a.copyMessageChildren(sourceMessage)
-			} else {
-				messageCounter := a.countMessages(a.tree)
-				messageName := fmt.Sprintf("message_%d", messageCounter+1)
-				node.Type = messageName
-				if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
-					node.Name = fmt.Sprintf("field_%d", node.FieldNum)
-				}
-				node.Value = nil
-				node.Children = make([]*protobuf.TreeNode, 0)
+		if sourceMessage != nil {
+			node.Type = newType
+			if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
+				node.Name = fmt.Sprintf("field_%d", node.FieldNum)
+			}
+			node.Value = nil
+			node.Children = a.copyMessageChildren(sourceMessage)
+		} else {
+			messageCounter := a.countMessages(a.tree)
+			messageName := fmt.Sprintf("message_%d", messageCounter+1)
+			node.Type = messageName
+			if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
+				node.Name = fmt.Sprintf("field_%d", node.FieldNum)
+			}
+			node.Value = nil
+			node.Children = make([]*protobuf.TreeNode, 0)
 			}
 		}
 		delete(a.editWidgets, uid)
@@ -571,7 +569,7 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 		}
 		return
 	}
-
+	
 	if isMessageType && isOldMessageType {
 		parentMessage := a.findParentMessage(node)
 
@@ -584,7 +582,7 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 					newType,
 					len(affectedFields),
 					func() {
-						sourceMessage := a.findMessageByName(newType)
+		sourceMessage := a.findMessageByName(newType)
 						var finalMessageType string
 
 						if sourceMessage != nil {
@@ -676,22 +674,22 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 			}
 		} else {
 			sourceMessage := a.findMessageByName(newType)
-			if sourceMessage != nil {
-				node.Type = newType
-				if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
-					node.Name = fmt.Sprintf("field_%d", node.FieldNum)
-				}
-				node.Value = nil
-				node.Children = a.copyMessageChildren(sourceMessage)
-			} else {
-				messageCounter := a.countMessages(a.tree)
-				messageName := fmt.Sprintf("message_%d", messageCounter+1)
-				node.Type = messageName
-				if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
-					node.Name = fmt.Sprintf("field_%d", node.FieldNum)
-				}
-				node.Value = nil
-				node.Children = make([]*protobuf.TreeNode, 0)
+		if sourceMessage != nil {
+			node.Type = newType
+			if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
+				node.Name = fmt.Sprintf("field_%d", node.FieldNum)
+			}
+			node.Value = nil
+			node.Children = a.copyMessageChildren(sourceMessage)
+		} else {
+			messageCounter := a.countMessages(a.tree)
+			messageName := fmt.Sprintf("message_%d", messageCounter+1)
+			node.Type = messageName
+			if node.Name == "" || !strings.HasPrefix(node.Name, "field_") {
+				node.Name = fmt.Sprintf("field_%d", node.FieldNum)
+			}
+			node.Value = nil
+			node.Children = make([]*protobuf.TreeNode, 0)
 			}
 		}
 		delete(a.editWidgets, uid)
@@ -1041,14 +1039,14 @@ func (a *protoTreeAdapter) handleTypeChange(uid widget.TreeNodeID, oldType, newT
 			if shouldPreserveValueForDialog {
 				node.Value = valueStrForDialog
 			} else {
-				node.Value = nil
+			node.Value = nil
 			}
 			node.Type = newType
 			if editWidget, ok := a.editWidgets[uid]; ok {
 				if shouldPreserveValueForDialog {
 					editWidget.entry.SetText(valueStrForDialog)
 				} else {
-					editWidget.entry.SetText("")
+				editWidget.entry.SetText("")
 				}
 				editWidget.typeCombo.SetSelected(newType)
 				a.updateEntryValidation(uid, newType)
