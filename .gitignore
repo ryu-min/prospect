@@ -37,3 +37,6 @@ build/
 *.log
 
 cmd/prospect/__debug*
+
+# Unused testdata files
+testdata_unused/
