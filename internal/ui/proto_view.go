@@ -17,10 +17,10 @@ import (
 )
 
 func protoView(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabManager) fyne.CanvasObject {
-	return protoViewWithFile(fyneApp, parentWindow, browserTabs, "")
+	return protoViewWithFile(fyneApp, parentWindow, browserTabs, "", "", "")
 }
 
-func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabManager, filePath string) fyne.CanvasObject {
+func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *tabManager, filePath string, schemaPath string, schemaMessageName string) fyne.CanvasObject {
 	parser, err := protobuf.NewParser()
 	if err != nil {
 		errorLabel := widget.NewLabel(fmt.Sprintf("Error: %v", err))
@@ -179,7 +179,7 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 
 					currentTree = tree
 					adapter := newProtoTreeAdapter(tree)
-					adapter.SetWindow(parentWindow) // Устанавливаем окно для диалогов
+					adapter.SetWindow(parentWindow)
 					newTreeWidget := widget.NewTree(adapter.ChildUIDs, adapter.IsBranch, adapter.CreateNode, adapter.UpdateNode)
 					newTreeWidget.OpenBranch("root")
 					treeWidget = newTreeWidget
@@ -188,6 +188,7 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 					newBorder := container.NewPadded(newScrollContainer)
 					if browserTabs != nil {
 						browserTabs.UpdateTabContent(container.NewPadded(newBorder))
+						browserTabs.SetTabSchema(schemaPath, messageName)
 					}
 					log.Printf("Schema applied successfully with message '%s', tree updated", messageName)
 				}
@@ -357,10 +358,40 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 	if filePath != "" {
 		if err := loadFileIntoView(filePath, parser, &currentTree, &treeWidget, &treeScrollContainer, parentWindow, browserTabs, dialogState, &currentFilePath); err != nil {
 			log.Printf("Failed to load file %s: %v", filePath, err)
+		} else if schemaPath != "" && schemaMessageName != "" {
+			applySchemaToLoadedTree(parser, schemaPath, schemaMessageName, &currentTree, &treeWidget, &treeScrollContainer, parentWindow, browserTabs)
 		}
 	}
 
 	return container.NewPadded(treeScrollContainer)
+}
+
+func applySchemaToLoadedTree(parser *protobuf.Parser, schemaPath string, messageName string, currentTree **protobuf.TreeNode, treeWidget **widget.Tree, treeScrollContainer **container.Scroll, parentWindow fyne.Window, browserTabs *tabManager) {
+	if *currentTree == nil {
+		log.Printf("Cannot apply schema: tree is nil")
+		return
+	}
+
+	tree, err := parser.ApplySchemaWithMessage(*currentTree, schemaPath, messageName)
+	if err != nil {
+		log.Printf("Failed to apply schema: %v", err)
+		return
+	}
+
+	*currentTree = tree
+	adapter := newProtoTreeAdapter(tree)
+	adapter.SetWindow(parentWindow)
+	newTreeWidget := widget.NewTree(adapter.ChildUIDs, adapter.IsBranch, adapter.CreateNode, adapter.UpdateNode)
+	newTreeWidget.OpenBranch("root")
+	*treeWidget = newTreeWidget
+	newScrollContainer := container.NewScroll(newTreeWidget)
+	*treeScrollContainer = newScrollContainer
+	newBorder := container.NewPadded(newScrollContainer)
+	if browserTabs != nil {
+		browserTabs.UpdateTabContent(container.NewPadded(newBorder))
+		browserTabs.SetTabSchema(schemaPath, messageName)
+	}
+	log.Printf("Schema applied successfully on load with message '%s'", messageName)
 }
 
 func loadFileIntoView(filePath string, parser *protobuf.Parser, currentTree **protobuf.TreeNode, treeWidget **widget.Tree, treeScrollContainer **container.Scroll, parentWindow fyne.Window, browserTabs *tabManager, dialogState *fileDialogState, currentFilePath *string) error {

@@ -16,10 +16,12 @@ type tabManager struct {
 }
 
 type tabData struct {
-	title           string
-	content         fyne.CanvasObject
-	filePath        string
-	toolbarCallbacks *toolbarCallbacks
+	title             string
+	content           fyne.CanvasObject
+	filePath          string
+	schemaPath        string
+	schemaMessageName string
+	toolbarCallbacks  *toolbarCallbacks
 }
 
 type toolbarCallbacks struct {
@@ -149,6 +151,21 @@ func (tm *tabManager) SetTabFilePath(filePath string) {
 		tm.tabs[tm.selectedTab].filePath = filePath
 		go saveTabState(tm)
 	}
+}
+
+func (tm *tabManager) SetTabSchema(schemaPath string, messageName string) {
+	if tm.selectedTab >= 0 && tm.selectedTab < len(tm.tabs) {
+		tm.tabs[tm.selectedTab].schemaPath = schemaPath
+		tm.tabs[tm.selectedTab].schemaMessageName = messageName
+		go saveTabState(tm)
+	}
+}
+
+func (tm *tabManager) GetTabSchema() (string, string) {
+	if tm.selectedTab >= 0 && tm.selectedTab < len(tm.tabs) {
+		return tm.tabs[tm.selectedTab].schemaPath, tm.tabs[tm.selectedTab].schemaMessageName
+	}
+	return "", ""
 }
 
 func (tm *tabManager) GetToolbarManager() *toolbarManager {

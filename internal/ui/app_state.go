@@ -20,8 +20,10 @@ type appState struct {
 }
 
 type tabState struct {
-	Title    string `json:"title"`
-	FilePath string `json:"filePath,omitempty"`
+	Title             string `json:"title"`
+	FilePath          string `json:"filePath,omitempty"`
+	SchemaPath        string `json:"schemaPath,omitempty"`
+	SchemaMessageName string `json:"schemaMessageName,omitempty"`
 }
 
 func getAppStatePath() (string, error) {
@@ -83,8 +85,10 @@ func saveTabState(tm *tabManager) error {
 
 	for _, tab := range tm.tabs {
 		state.Tabs = append(state.Tabs, tabState{
-			Title:    tab.title,
-			FilePath: tab.filePath,
+			Title:             tab.title,
+			FilePath:          tab.filePath,
+			SchemaPath:        tab.schemaPath,
+			SchemaMessageName: tab.schemaMessageName,
 		})
 	}
 
@@ -119,9 +123,13 @@ func loadTabState(tm *tabManager, fyneApp fyne.App, window fyne.Window) error {
 	}
 
 	for i, tabState := range state.Tabs {
-		content := protoViewWithFile(fyneApp, window, tm, tabState.FilePath)
+		content := protoViewWithFile(fyneApp, window, tm, tabState.FilePath, tabState.SchemaPath, tabState.SchemaMessageName)
 		tabIndex := len(tm.tabs)
 		tm.addTabWithPathWithoutSave(tabState.Title, content, tabState.FilePath)
+		if tabState.SchemaPath != "" {
+			tm.tabs[tabIndex].schemaPath = tabState.SchemaPath
+			tm.tabs[tabIndex].schemaMessageName = tabState.SchemaMessageName
+		}
 		if i == state.SelectedTab && state.SelectedTab >= 0 && state.SelectedTab < len(state.Tabs) {
 			tm.selectTabWithoutSave(tabIndex)
 		}
