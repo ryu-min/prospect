@@ -48,7 +48,6 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 	var openCallback func()
 	var saveCallback func()
 	var applySchemaCallback func()
-	var exportJSONCallback func()
 	var exportSchemaCallback func()
 
 	if toolbarMgr != nil {
@@ -246,47 +245,6 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 		}
 		toolbarMgr.SetSaveCallback(saveCallback)
 
-		exportJSONCallback = func() {
-			if currentTree == nil {
-				dialog.ShowInformation("Information", "Please open a proto file first", parentWindow)
-				return
-			}
-
-			jsonData, err := currentTree.ToJSON()
-			if err != nil {
-				dialog.ShowError(fmt.Errorf("export error: %w", err), parentWindow)
-				return
-			}
-
-			fileDialog := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
-				if err != nil {
-					dialog.ShowError(err, parentWindow)
-					return
-				}
-				if writer == nil {
-					return
-				}
-				defer writer.Close()
-
-				dialogState.setLastSaveDir(writer.URI())
-
-				if _, err := writer.Write(jsonData); err != nil {
-					dialog.ShowError(fmt.Errorf("write error: %w", err), parentWindow)
-					return
-				}
-
-				dialog.ShowInformation("Success", "JSON file saved", parentWindow)
-			}, parentWindow)
-
-			if lastDir := dialogState.getLastSaveDir(); lastDir != nil {
-				fileDialog.SetLocation(lastDir)
-			}
-
-			fileDialog.Resize(dialogState.getDialogSize())
-			fileDialog.Show()
-		}
-		toolbarMgr.SetExportJSONCallback(exportJSONCallback)
-
 		exportSchemaCallback = func() {
 			if currentTree == nil {
 				dialog.ShowInformation("Information", "Please open a proto file first", parentWindow)
@@ -336,7 +294,6 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 				openCallback:         openCallback,
 				saveCallback:         saveCallback,
 				applySchemaCallback:  applySchemaCallback,
-				exportJSONCallback:   exportJSONCallback,
 				exportSchemaCallback: exportSchemaCallback,
 			}
 			browserTabs.SetCurrentTabToolbarCallbacks(callbacks)

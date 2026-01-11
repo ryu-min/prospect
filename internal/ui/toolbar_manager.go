@@ -12,7 +12,6 @@ type toolbarManager struct {
 	openBtn          *widget.Button
 	saveBtn          *widget.Button
 	applySchemaBtn   *widget.Button
-	exportJSONBtn    *widget.Button
 	exportSchemaBtn  *widget.Button
 }
 
@@ -28,9 +27,6 @@ func newToolbarManager() *toolbarManager {
 	tm.applySchemaBtn = widget.NewButtonWithIcon("Apply schema", theme.SettingsIcon(), func() {})
 	tm.applySchemaBtn.Importance = widget.LowImportance
 
-	tm.exportJSONBtn = widget.NewButtonWithIcon("Export JSON", theme.FileIcon(), func() {})
-	tm.exportJSONBtn.Importance = widget.LowImportance
-
 	tm.exportSchemaBtn = widget.NewButtonWithIcon("Export schema", theme.DocumentIcon(), func() {})
 	tm.exportSchemaBtn.Importance = widget.LowImportance
 
@@ -38,7 +34,6 @@ func newToolbarManager() *toolbarManager {
 		tm.openBtn,
 		tm.saveBtn,
 		tm.applySchemaBtn,
-		tm.exportJSONBtn,
 		tm.exportSchemaBtn,
 	)
 	return tm
@@ -54,10 +49,6 @@ func (tm *toolbarManager) SetSaveCallback(callback func()) {
 
 func (tm *toolbarManager) SetApplySchemaCallback(callback func()) {
 	tm.applySchemaBtn.OnTapped = callback
-}
-
-func (tm *toolbarManager) SetExportJSONCallback(callback func()) {
-	tm.exportJSONBtn.OnTapped = callback
 }
 
 func (tm *toolbarManager) SetExportSchemaCallback(callback func()) {
