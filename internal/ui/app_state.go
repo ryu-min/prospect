@@ -12,10 +12,9 @@ type appState struct {
 	Tabs            []tabState `json:"tabs"`
 	SelectedTab     int        `json:"selectedTab"`
 	FileDialogState struct {
-		LastDirPath       string  `json:"lastDirPath"`
-		LastSchemaDirPath string  `json:"lastSchemaDirPath"`
-		DialogWidth       float32 `json:"dialogWidth"`
-		DialogHeight      float32 `json:"dialogHeight"`
+		LastDirPath  string  `json:"lastDirPath"`
+		DialogWidth  float32 `json:"dialogWidth"`
+		DialogHeight float32 `json:"dialogHeight"`
 	} `json:"fileDialogState"`
 }
 
@@ -94,7 +93,6 @@ func saveTabState(tm *tabManager) error {
 
 	fileDialogState := getFileDialogState()
 	state.FileDialogState.LastDirPath = fileDialogState.lastDirPath
-	state.FileDialogState.LastSchemaDirPath = fileDialogState.lastSchemaDirPath
 	state.FileDialogState.DialogWidth = fileDialogState.dialogSize.Width
 	state.FileDialogState.DialogHeight = fileDialogState.dialogSize.Height
 
@@ -114,9 +112,6 @@ func loadTabState(tm *tabManager, fyneApp fyne.App, window fyne.Window) error {
 	fileDialogState := getFileDialogState()
 	if state.FileDialogState.LastDirPath != "" {
 		fileDialogState.lastDirPath = state.FileDialogState.LastDirPath
-	}
-	if state.FileDialogState.LastSchemaDirPath != "" {
-		fileDialogState.lastSchemaDirPath = state.FileDialogState.LastSchemaDirPath
 	}
 	if state.FileDialogState.DialogWidth > 0 && state.FileDialogState.DialogHeight > 0 {
 		fileDialogState.dialogSize = fyne.NewSize(state.FileDialogState.DialogWidth, state.FileDialogState.DialogHeight)
@@ -150,7 +145,6 @@ func saveFileDialogState() {
 		}
 	}
 	state.FileDialogState.LastDirPath = globalDialogState.lastDirPath
-	state.FileDialogState.LastSchemaDirPath = globalDialogState.lastSchemaDirPath
 	state.FileDialogState.DialogWidth = globalDialogState.dialogSize.Width
 	state.FileDialogState.DialogHeight = globalDialogState.dialogSize.Height
 	saveAppState(state)
@@ -164,16 +158,12 @@ func loadFileDialogState() {
 
 	wd, _ := os.Getwd()
 	globalDialogState = &fileDialogState{
-		dialogSize:        fyne.NewSize(800, 600),
-		lastDirPath:       wd,
-		lastSchemaDirPath: wd,
+		dialogSize:  fyne.NewSize(800, 600),
+		lastDirPath: wd,
 	}
 
 	if state.FileDialogState.LastDirPath != "" {
 		globalDialogState.lastDirPath = state.FileDialogState.LastDirPath
-	}
-	if state.FileDialogState.LastSchemaDirPath != "" {
-		globalDialogState.lastSchemaDirPath = state.FileDialogState.LastSchemaDirPath
 	}
 	if state.FileDialogState.DialogWidth > 0 && state.FileDialogState.DialogHeight > 0 {
 		globalDialogState.dialogSize = fyne.NewSize(state.FileDialogState.DialogWidth, state.FileDialogState.DialogHeight)
