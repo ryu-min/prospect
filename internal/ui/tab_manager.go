@@ -9,10 +9,10 @@ import (
 
 type tabManager struct {
 	widget.BaseWidget
-	tabs         []*tabData
-	selectedTab  int
-	addCallback  func()
-	toolbarMgr   *toolbarManager
+	tabs        []*tabData
+	selectedTab int
+	addCallback func()
+	toolbarMgr  *toolbarManager
 }
 
 type tabData struct {
@@ -29,6 +29,7 @@ type toolbarCallbacks struct {
 	saveCallback         func()
 	applySchemaCallback  func()
 	exportSchemaCallback func()
+	exportJSONCallback   func()
 }
 
 func newTabManager() *tabManager {

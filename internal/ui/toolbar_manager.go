@@ -13,6 +13,7 @@ type toolbarManager struct {
 	saveBtn          *widget.Button
 	applySchemaBtn   *widget.Button
 	exportSchemaBtn  *widget.Button
+	exportJSONBtn    *widget.Button
 }
 
 func newToolbarManager() *toolbarManager {
@@ -30,11 +31,15 @@ func newToolbarManager() *toolbarManager {
 	tm.exportSchemaBtn = widget.NewButtonWithIcon("Export schema", theme.DocumentIcon(), func() {})
 	tm.exportSchemaBtn.Importance = widget.LowImportance
 
+	tm.exportJSONBtn = widget.NewButtonWithIcon("Export JSON", theme.DocumentIcon(), func() {})
+	tm.exportJSONBtn.Importance = widget.LowImportance
+
 	tm.toolbar = container.NewHBox(
 		tm.openBtn,
 		tm.saveBtn,
 		tm.applySchemaBtn,
 		tm.exportSchemaBtn,
+		tm.exportJSONBtn,
 	)
 	return tm
 }
@@ -53,6 +58,10 @@ func (tm *toolbarManager) SetApplySchemaCallback(callback func()) {
 
 func (tm *toolbarManager) SetExportSchemaCallback(callback func()) {
 	tm.exportSchemaBtn.OnTapped = callback
+}
+
+func (tm *toolbarManager) SetExportJSONCallback(callback func()) {
+	tm.exportJSONBtn.OnTapped = callback
 }
 
 func (tm *toolbarManager) GetToolbar() fyne.CanvasObject {

@@ -49,6 +49,7 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 	var saveCallback func()
 	var applySchemaCallback func()
 	var exportSchemaCallback func()
+	var exportJSONCallback func()
 
 	if toolbarMgr != nil {
 		openCallback = func() {
@@ -344,12 +345,60 @@ func protoViewWithFile(fyneApp fyne.App, parentWindow fyne.Window, browserTabs *
 		}
 		toolbarMgr.SetExportSchemaCallback(exportSchemaCallback)
 
+		exportJSONCallback = func() {
+			if currentTree == nil {
+				dialog.ShowInformation("Information", "Please open a proto file first", parentWindow)
+				return
+			}
+
+			jsonContent, err := protobuf.TreeNodeToJSONString(currentTree)
+			if err != nil {
+				dialog.ShowError(fmt.Errorf("error converting to JSON: %w", err), parentWindow)
+				return
+			}
+
+			fileDialog := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
+				if err != nil {
+					dialog.ShowError(err, parentWindow)
+					return
+				}
+				if writer == nil {
+					return
+				}
+				defer writer.Close()
+
+				dialogState.setLastSaveDir(writer.URI())
+
+				if _, err := writer.Write([]byte(jsonContent)); err != nil {
+					dialog.ShowError(fmt.Errorf("write error: %w", err), parentWindow)
+					return
+				}
+
+				dialog.ShowInformation("Success", "JSON file saved", parentWindow)
+			}, parentWindow)
+
+			if lastDir := dialogState.getLastSaveDir(); lastDir != nil {
+				fileDialog.SetLocation(lastDir)
+			} else if currentFilePath != "" {
+				dirPath := filepath.Dir(currentFilePath)
+				uri := storage.NewFileURI(dirPath)
+				if listableURI, err := storage.ListerForURI(uri); err == nil {
+					fileDialog.SetLocation(listableURI)
+				}
+			}
+
+			fileDialog.Resize(dialogState.getDialogSize())
+			fileDialog.Show()
+		}
+		toolbarMgr.SetExportJSONCallback(exportJSONCallback)
+
 		if browserTabs != nil {
 			callbacks := &toolbarCallbacks{
 				openCallback:         openCallback,
 				saveCallback:         saveCallback,
 				applySchemaCallback:  applySchemaCallback,
 				exportSchemaCallback: exportSchemaCallback,
+				exportJSONCallback:   exportJSONCallback,
 			}
 			browserTabs.SetCurrentTabToolbarCallbacks(callbacks)
 		}
